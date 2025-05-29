@@ -153,7 +153,7 @@ begin
       freq := 44100;
       format := AUDIO_S16SYS;
       channels := 0; // override with SDL_AUDIO_CHANNELS
-      samples := 0;
+      samples := 32;
     end;
 
     dev := SDL_OpenAudioDevice(name, 1, @spec, @spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE or SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
