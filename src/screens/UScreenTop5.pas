@@ -49,7 +49,7 @@ type
       TextLevel:       integer;
       TextArtistTitle: integer;
       DifficultyShow:  integer;
-      
+
       StaticNumber:    array of integer;
       TextNumber:      array of integer;
       TextName:        array of integer;
