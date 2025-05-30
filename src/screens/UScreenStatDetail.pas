@@ -241,7 +241,7 @@ begin
     if (FormatStr[I] = '\') and (FormatStr[I+1] = 'n') then
       Inc(NewlinesInFormatStr);
   end;
-  
+
   Count := Ini.StatDetailCount div (NewlinesInFormatStr);
 
   // fetch statistics
