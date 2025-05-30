@@ -33,6 +33,8 @@ def parse_log(logfile):
                     if user_id in channel_users[current_channel]:
                         channel_users[current_channel].remove(user_id)
 
+                if channel == "Root[0:-1]":
+                    continue
                 # Add the user to the new channel
                 user_channels[user_id] = channel
                 channel_users[channel].append(user_id)
@@ -50,25 +52,27 @@ def parse_log(logfile):
                 continue
 
     # Find the last non-empty channel
-    non_empty_channels = [channel for channel, users in channel_users.items() if users]
+    non_empty_channels = [channel for channel, users in sorted(channel_users.items()) if users]
     if not non_empty_channels:
-        print("No non-empty channels found.")
+        print("Mic1: None")
         return
     last_non_empty_channel = non_empty_channels[-1]
-
+    
+    cnt = 0
     # Print the final state of channels and their users up to the last non-empty channel
-    for channel, users in channel_users.items():
+    for channel, users in sorted(channel_users.items()):
         channel_name = channel.split('[')[0]
-        if len(users) > 2:
-            user_names = ", ".join(users[:-1]) + " and " + users[-1]
-        elif len(users) > 1:
-            user_names = " and ".join(users)
+        if len(users) > 1:
+            user_names = " & ".join(users)
         elif len(users) == 0:
             user_names = "None"
         else:
             user_names = users[0]
         print(f"{channel_name}: {user_names}")
+        cnt += 1
         if channel == last_non_empty_channel:
+            if cnt == 5:
+                print(f"Mic6: None")
             break
 
 
