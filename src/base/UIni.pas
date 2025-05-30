@@ -1616,7 +1616,7 @@ begin
   TopScores := ReadArrayIndex(ITopScores, IniFile, 'Advanced', 'TopScores', IGNORE_INDEX, 'Player');
 
   // StatDetailCount
-  StatDetailCount := IniFile.ReadInteger('Advanced', 'StatDetailCount', 10);
+  StatDetailCount := IniFile.ReadInteger('Advanced', 'StatDetailCount', 20);
 
   // SyncTo
   SyncTo := ReadArrayIndex(ISyncTo, IniFile, 'Advanced', 'SyncTo', Ord(stMusic));
