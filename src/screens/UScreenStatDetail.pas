@@ -227,15 +227,22 @@ var
   I: integer;
   FormatStr: string;
   PerPage: byte;
+  NewlinesInFormatStr: integer;
 begin
   // reset texts
   for I := 0 to Ini.StatDetailCount-1 do
     Text[I].Text := '';
 
-  if Typ = stBestScores then
-    Count := Byte(Ini.StatDetailCount div 2)
-  else
-    Count := Ini.StatDetailCount;
+  FormatStr := Theme.StatDetail.FormatStr[Ord(Typ)];
+
+  NewlinesInFormatStr := 1;
+  for I := 1 to Length(FormatStr)-1 do
+  begin
+    if (FormatStr[I] = '\') and (FormatStr[I+1] = 'n') then
+      Inc(NewlinesInFormatStr);
+  end;
+  
+  Count := Ini.StatDetailCount div (NewlinesInFormatStr);
 
   // fetch statistics
   StatList := Database.GetStats(Typ, Count, NewPage, Reversed);
@@ -254,7 +261,7 @@ begin
               //Set Texts
               if (Score > 0) then
               begin
-                Text[I*2].Text := Format(Theme.StatDetail.FormatStr[Ord(stBestScores)], [Singer, Score, Theme.ILevel[Difficulty], SongArtist, SongTitle, Date]);
+                Text[I*2].Text := Format(FormatStr, [Singer, Score, Theme.ILevel[Difficulty], SongArtist, SongTitle, Date]);
               end;
             end;
           end;
@@ -264,7 +271,7 @@ begin
             begin
               //Set Texts
               if (AverageScore > 0) then
-                Text[I].Text := Format(Theme.StatDetail.FormatStr[Ord(stBestSingers)], [Player, AverageScore, Count]);
+                Text[I].Text := Format(FormatStr, [Player, AverageScore, Count]);
             end;
           end;
 
@@ -273,7 +280,7 @@ begin
             begin
               //Set Texts
               if (Artist <> '') then begin
-                Text[I].Text := Format(Theme.StatDetail.FormatStr[Ord(stMostSungSong)], [Artist, Title, TimesSung, AverageScore]);
+                Text[I].Text := Format(FormatStr, [Artist, Title, TimesSung, AverageScore]);
                 end;
             end;
           end;
@@ -283,7 +290,7 @@ begin
             begin
               //Set Texts
               if (ArtistName <> '') then
-                Text[I].Text := Format(Theme.StatDetail.FormatStr[Ord(stMostPopBand)], [ArtistName, TimesSungtot, AverageScore]);
+                Text[I].Text := Format(FormatStr, [ArtistName, TimesSungtot, AverageScore]);
             end;
           end;
         end;
