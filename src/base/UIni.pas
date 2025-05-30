@@ -1935,7 +1935,7 @@ begin
 
     //TopScores
     IniFile.WriteString('Advanced', 'TopScores', ITopScores[TopScores]);
-    
+
     //StatDetailCount
     IniFile.WriteInteger('Advanced', 'StatDetailCount', StatDetailCount);
 
