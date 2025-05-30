@@ -172,9 +172,7 @@ begin
   AddText(Theme.StatDetail.TextDescription);
   AddText(Theme.StatDetail.TextPage);
 
-  Log.LogStatus('Adding Buttons', 'ScreenStatDetail');
   LoadFromTheme(Theme.StatDetail);
-  Log.LogStatus('Buttons added', 'ScreenStatDetail');
 
   AddButton(Theme.StatDetail.ButtonNext);
   if (Length(Button[0].Text)=0) then
