@@ -218,6 +218,7 @@ type
       DuetScores:     integer;
       TopScores:      integer;
       StatDetailCount:       integer;
+      TopScreenSize:  integer;
       SingTimebarMode:       integer;
       JukeboxTimebarMode:    integer;
 
@@ -555,6 +556,7 @@ var
   IDuetScoresTranslated:       array[0..3] of UTF8String = ('Off', 'Separate', 'Combined', 'Both');
   ITopScoresTranslated:        array[0..1] of UTF8String = ('All', 'Player');
   IStatDetailCount:            array of UTF8String;
+  ITopScreenSize:              array of UTF8String;
 
   IJoypadTranslated:           array[0..1] of UTF8String = ('Off', 'On');
   IMouseTranslated:            array[0..2] of UTF8String = ('Off', 'On [System Cursor]', 'On [Game Cursor]');
@@ -1628,6 +1630,8 @@ begin
 
   // StatDetailCount
   StatDetailCount := IniFile.ReadInteger('Advanced', 'StatDetailCount', 20);
+  // TopScreenSize
+  TopScreenSize := IniFile.ReadInteger('Advanced', 'TopScreenSize', 5);
 
   // SyncTo
   SyncTo := ReadArrayIndex(ISyncTo, IniFile, 'Advanced', 'SyncTo', Ord(stMusic));
@@ -1952,6 +1956,8 @@ begin
 
     //StatDetailCount
     IniFile.WriteInteger('Advanced', 'StatDetailCount', StatDetailCount);
+    //TopScreenSize
+    IniFile.WriteInteger('Advanced', 'TopScreenSize', TopScreenSize);
 
     //SyncTo
     IniFile.WriteString('Advanced', 'SyncTo', ISyncTo[SyncTo]);

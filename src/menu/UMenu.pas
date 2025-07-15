@@ -98,6 +98,7 @@ type
 
       // static
       function AddStatic(ThemeStatic: TThemeStatic): integer; overload;
+      function AddStatic(X, Y: real; ThemeStatic: TThemeStatic): integer; overload;
       function AddStaticRectangle(static: TThemeStaticRectangle): integer;
       function AddStaticAlphaRectangle(static: TThemeStaticAlphaRectangle): integer;
       function AddStaticColorRectangle(static: TThemeStaticColorRectangle): integer;
@@ -624,6 +625,15 @@ end;
 function TMenu.AddStatic(ThemeStatic: TThemeStatic): integer;
 begin
   Result := AddStatic(ThemeStatic.X, ThemeStatic.Y, ThemeStatic.W, ThemeStatic.H, ThemeStatic.Z,
+    ThemeStatic.ColR, ThemeStatic.ColG, ThemeStatic.ColB,
+    ThemeStatic.TexX1, ThemeStatic.TexY1, ThemeStatic.TexX2, ThemeStatic.TexY2, ThemeStatic.Alpha,
+    Skin.GetTextureFileName(ThemeStatic.Tex),
+    ThemeStatic.Typ, $FFFFFF, ThemeStatic.Reflection, ThemeStatic.Reflectionspacing);
+end;
+
+function TMenu.AddStatic(X,Y: real; ThemeStatic: TThemeStatic): integer;
+begin
+  Result := AddStatic(X, Y, ThemeStatic.W, ThemeStatic.H, ThemeStatic.Z,
     ThemeStatic.ColR, ThemeStatic.ColG, ThemeStatic.ColB,
     ThemeStatic.TexX1, ThemeStatic.TexY1, ThemeStatic.TexX2, ThemeStatic.TexY2, ThemeStatic.Alpha,
     Skin.GetTextureFileName(ThemeStatic.Tex),
