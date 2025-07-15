@@ -293,7 +293,7 @@ begin
 
   OldBeatD := CurrentBeatD;
   // MidBeatD = MidBeat with additional GAP
-  MidBeatD := -0.5 + GetMidBeat(CurLyricsTime - (StartTime + Ini.MicDelay + (PlayersPlay - 1) * 5) / 1000);
+  MidBeatD := -0.5 + GetMidBeat(CurLyricsTime - (StartTime + Ini.MicDelay + Ini.MicDelayPerPlayer * PlayersPlay) / 1000);
   CurrentBeatD := Floor(MidBeatD);
 end;
 

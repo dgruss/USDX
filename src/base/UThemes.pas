@@ -695,6 +695,7 @@ type
     SelectDebug:        TThemeSelectSlide;
     SelectAVDelay:      TThemeSelectSlide;
     SelectMicDelay:     TThemeSelectSlide;
+    SelectMicDelayPerPlayer:     TThemeSelectSlide;
     ButtonExit:         TThemeButton;
   end;
 
@@ -1957,6 +1958,7 @@ begin
       ThemeLoadSelectSlide(OptionsGame.SelectDebug,      'OptionsGameSelectDebug');
       ThemeLoadSelectSlide(OptionsGame.SelectAVDelay,    'OptionsGameSelectAVDelay');
       ThemeLoadSelectSlide(OptionsGame.SelectMicDelay,   'OptionsGameSelectMicDelay');
+      ThemeLoadSelectSlide(OptionsGame.SelectMicDelayPerPlayer,   'OptionsGameSelectMicDelayPerPlayer');
       ThemeLoadButton(OptionsGame.ButtonExit,            'OptionsGameButtonExit');
 
       // Options Graphics
