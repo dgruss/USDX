@@ -875,7 +875,11 @@ begin
   PlayMidi := false;
   MidiFadeIn := false;
 
-  AudioPlayback.Open(CurrentSong.Path.Append(CurrentSong.Audio),CurrentSong.Path.Append(CurrentSong.Karaoke));
+  if (not Assigned(CurrentSong.Karaoke)) or (CurrentSong.Karaoke = PATH_NONE) then
+    AudioPlayback.Open(CurrentSong.Path.Append(CurrentSong.Audio), nil)
+  else
+    AudioPlayback.Open(CurrentSong.Path.Append(CurrentSong.Audio), CurrentSong.Path.Append(CurrentSong.Karaoke));
+
   if ScreenSong.Mode = smMedley then
     AudioPlayback.SetVolume(0.1)
   else
@@ -1585,6 +1589,8 @@ begin
 
         SetLength(PlaylistMedley.Stats, len + 1);
         SetLength(PlaylistMedley.Stats[len].Player, num);
+        for I := 0 to num - 1 do
+          PlaylistMedley.Stats[len].Player[I].HighNote := -1;
 
         for J := 0 to len - 1 do
         begin
