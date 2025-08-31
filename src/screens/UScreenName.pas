@@ -49,9 +49,7 @@ uses
   dglOpenGL,
   SysUtils,
   sdl2,
-  md5,
-  Classes,
-  Process;
+  md5;
 
 type
   TScreenName = class(TMenu)
@@ -263,73 +261,12 @@ begin
   end;
 end;
 
-function GetMumbleNames: TStringList;
-var
-  Process: TProcess;
-  Output: TStringList;
-  Buffer: array[1..2048] of byte;
-  BytesRead: longint;
-  OutputData, ScriptPath: string;
-  TempBytes: TBytes;
-  Line: string;
-begin
-  Result := TStringList.Create;
-  Process := TProcess.Create(nil);
-  try
-    ScriptPath := IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0))) + 'nameschannels.py';
-    Process.Executable := 'python3';
-    Process.Parameters.Add(ScriptPath);
-    Process.Options := [poUsePipes];
-    
-    try
-      Process.Execute;
-
-      // Read stdout
-      OutputData := '';
-      repeat
-        BytesRead := Process.Output.Read(Buffer, SizeOf(Buffer));
-        if BytesRead > 0 then
-        begin
-          SetLength(TempBytes, BytesRead);
-          Move(Buffer, TempBytes[0], BytesRead);
-          OutputData := OutputData + TEncoding.UTF8.GetString(TempBytes, 0, BytesRead);
-        end;
-      until BytesRead = 0;
-
-      // Parse the output into a string list
-      Output := TStringList.Create;
-      try
-        Output.Text := OutputData;
-
-        for Line in Output do
-        begin
-          if Pos(': ', Line) > 0 then
-            Result.Add(Trim(Copy(Line, Pos(': ', Line) + 2, Length(Line))));
-        end;
-      finally
-        Output.Free;
-      end;
-
-    except
-      on E: Exception do
-        Log.LogWarn('GetMumbleNames: Exception - ' + E.Message, 'ScreenName');
-    end;
-
-  finally
-    Process.Free;
-  end;
-end;
-
-
-
-
 
 function TScreenName.ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean;
   var
     I: integer;
     SDL_ModState: word;
     Col: TRGB;
-    Names: TStringList;
 
   procedure HandleNameTemplate(const index: integer);
   var
@@ -405,28 +342,6 @@ begin
           else
             ParseInput(SDLK_ESCAPE, CharCode, PressedDown);
         end;
-
-      SDLK_TAB:
-      begin
-        Names := GetMumbleNames;
-        CountIndex := Min(Names.Count - 1, UIni.IMaxPlayerCount - 1);
-        if (CountIndex > 3) then
-        begin
-          CountIndex := 4;
-        end;
-        Ini.Players := CountIndex;
-        PlayersPlay := UIni.IPlayersVals[CountIndex];
-
-        for I := 0 to Min(PlayersPlay - 1, UIni.IMaxPlayerCount - 1) do
-        begin
-          Ini.Name[I] := Names[I];
-          PlayerNames[I] := Names[I];
-          Text[PlayerCurrentText[I]].Text := Names[I];
-        end;
-        RefreshPlayers(); // Ensure the UI updates with the new names
-        FadeTo(@ScreenName);
-      end;
-
 
       SDLK_ESCAPE :
         begin
@@ -953,6 +868,7 @@ var
 begin
   inherited;
 
+  Ini.ReloadNames;
   CountIndex := Ini.Players;
 
   for I := 0 to UIni.IMaxPlayerCount-1 do
@@ -1153,6 +1069,11 @@ begin
   //This should cause no Problems because all Buttons on this screen
   //Has Z Position.
   DrawBG;
+
+  if Ini.ReloadNames then
+  begin
+    OnShow;
+  end;
 
   if isScrolling then
   begin
