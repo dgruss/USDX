@@ -217,6 +217,7 @@ type
       SingScores:     integer;
       DuetScores:     integer;
       TopScores:      integer;
+      TopScreenSize:  integer;
       SingTimebarMode:       integer;
       JukeboxTimebarMode:    integer;
 
@@ -552,6 +553,7 @@ var
   ISingScoresTranslated:       array[0..1] of UTF8String = ('Off', 'On');
   IDuetScoresTranslated:       array[0..3] of UTF8String = ('Off', 'Separate', 'Combined', 'Both');
   ITopScoresTranslated:        array[0..1] of UTF8String = ('All', 'Player');
+  ITopScreenSize:              array of UTF8String;
 
   IJoypadTranslated:           array[0..1] of UTF8String = ('Off', 'On');
   IMouseTranslated:            array[0..2] of UTF8String = ('Off', 'On [System Cursor]', 'On [Game Cursor]');
@@ -1623,6 +1625,9 @@ begin
   // TopScores
   TopScores := ReadArrayIndex(ITopScores, IniFile, 'Advanced', 'TopScores', IGNORE_INDEX, 'Player');
 
+  // TopScreenSize
+  TopScreenSize := IniFile.ReadInteger('Advanced', 'TopScreenSize', 5);
+
   // SyncTo
   SyncTo := ReadArrayIndex(ISyncTo, IniFile, 'Advanced', 'SyncTo', Ord(stMusic));
 
@@ -1943,6 +1948,9 @@ begin
 
     //TopScores
     IniFile.WriteString('Advanced', 'TopScores', ITopScores[TopScores]);
+
+    //TopScreenSize
+    IniFile.WriteInteger('Advanced', 'TopScreenSize', TopScreenSize);
 
     //SyncTo
     IniFile.WriteString('Advanced', 'SyncTo', ISyncTo[SyncTo]);
