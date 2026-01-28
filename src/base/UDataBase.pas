@@ -142,15 +142,15 @@ type
 
       procedure AddMax_Score (Song: TSong; WebID: integer; Receive_Max_Score: integer; Level: integer);
       procedure AddMedia_Score (Song: TSong; WebID: integer; Receive_Media_Score: integer; Level: integer);
-      procedure AddUser_Score (Song: TSong; WebID: integer; Receive_User_Score: string; Level: integer);
+      procedure AddUser_Score (Song: TSong; WebID: integer; Receive_User_Score: UTF8String; Level: integer);
 
       function ReadMax_Score(Artist, Title: UTF8String; WebID, Level: integer): integer;
       function ReadMedia_Score(Artist, Title: UTF8String; WebID, Level: integer): integer;
-      function ReadUser_Score(Artist, Title: UTF8String; WebID, Level: integer): string;
+      function ReadUser_Score(Artist, Title: UTF8String; WebID, Level: integer): UTF8String;
 
       function ReadMax_ScoreLocal(Artist, Title: UTF8String; Level: integer): integer;
       function ReadMedia_ScoreLocal(Artist, Title: UTF8String; Level: integer): integer;
-      function ReadUser_ScoreLocal(Artist, Title: UTF8String; Level: integer): string;
+      function ReadUser_ScoreLocal(Artist, Title: UTF8String; Level: integer): UTF8String;
 
       function Delete_Score(Song: TSong; WebID: integer): integer;
 
@@ -1054,9 +1054,9 @@ end;
 (**
  * Add User to Song
  *)
-procedure TDataBaseSystem.AddUser_Score (Song: TSong; WebID: integer; Receive_User_Score: string; Level: integer);
+procedure TDataBaseSystem.AddUser_Score (Song: TSong; WebID: integer; Receive_User_Score: UTF8String; Level: integer);
 var
-  User_Score: string;
+  User_Score: UTF8String;
   ID: integer;
   TableData: TSQLiteTable;
 begin
@@ -1085,7 +1085,7 @@ begin
           'UPDATE ['+cUS_Webs_Stats+'] ' +
           'SET [User_Score_' + IntToStr(Level) + '] = ? ' +
           ' WHERE [WebID] = ? AND [SongID] = ?;',
-          [UTF8Encode(Receive_User_Score), WebID, ID]);
+          [Receive_User_Score, WebID, ID]);
     end;
 
   except on E: Exception do
@@ -1172,9 +1172,9 @@ end;
 (**
  * Read User_Score
  *)
-function TDataBaseSystem.ReadUser_Score(Artist, Title: UTF8String; WebID, Level: integer): string;
+function TDataBaseSystem.ReadUser_Score(Artist, Title: UTF8String; WebID, Level: integer): UTF8String;
 var
-  User_Score: string;
+  User_Score: UTF8String;
   SongID: integer;
   TableData: TSQLiteTable;
 begin
@@ -1201,7 +1201,7 @@ begin
 
   TableData.Free;
 
-  Result := UTF8Decode(User_Score);
+  Result := User_Score;
 
 end;
 
@@ -1284,9 +1284,9 @@ end;
 (**
  * Read User_Score
  *)
-function TDataBaseSystem.ReadUser_ScoreLocal(Artist, Title: UTF8String; Level: integer): string;
+function TDataBaseSystem.ReadUser_ScoreLocal(Artist, Title: UTF8String; Level: integer): UTF8String;
 var
-  User_Score: string;
+  User_Score: UTF8String;
   ID: integer;
   TableData: TSQLiteTable;
 begin

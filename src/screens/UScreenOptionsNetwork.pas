@@ -109,7 +109,7 @@ type
   );
 
 var
-  Receive_String: widestring;
+  Receive_String: UTF8String;
 
 // My   *silly*   write function just counts the number of "<" characters.
 // Your *serious* write function will probably want to do something else...
@@ -118,7 +118,7 @@ var I:LongInt;
 begin
   Result:= ( ItemSize * ItemCount );
   for I:=0 to Result-1 do
-    Receive_String := Receive_String + widechar(IncomingData[I]);
+    Receive_String := Receive_String + UTF8String(AnsiChar(IncomingData[I]));
 end;
 
 procedure OnDeleteUser(Value: boolean; Data: Pointer);
@@ -710,4 +710,3 @@ begin
 end;
 
 end.
-

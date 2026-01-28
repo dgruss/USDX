@@ -226,7 +226,7 @@ begin
        (not FileName.Equals('..')) and
        (not FileName.Equals('')) then
     begin
-      Log.LogDebug('Recursing: ' + StartDir.Append(FileName).ToWide, 'TSongs.FindFilesByExtension');
+      Log.LogDebug('Recursing: ' + StartDir.Append(FileName).ToUTF8, 'TSongs.FindFilesByExtension');
       SubDirs := CollectDirectories(StartDir.Append(FileName), true, Owner);
       SubDirCount := Length(SubDirs);
       if SubDirCount > 0 then
@@ -359,6 +359,7 @@ var
   Iter: IFileIterator;
   FileInfo: TFileInfo;
   FileName: IPath;
+  FileNameUTF8: UTF8String;
 begin
   if Recursive then
     DirList := CollectDirectories(Dir, true, Self)
@@ -375,9 +376,12 @@ begin
     begin
       FileInfo := Iter.Next;
       FileName := FileInfo.Name;
-      if ((FileInfo.Attr and faDirectory) = 0) and Ext.Equals(FileName.GetExtension(), true) then
+      FileNameUTF8 := FileName.ToUTF8;
+      if ((FileInfo.Attr and faDirectory) = 0) and
+         Ext.Equals(FileName.GetExtension(), true) and
+         ((Length(FileNameUTF8) = 0) or (FileNameUTF8[1] <> '.')) then
       begin
-        Log.LogDebug('Found file ' + DirList[DirIndex].Append(FileName).ToWide, 'TSongs.FindFilesByExtension');
+        Log.LogDebug('Found file ' + DirList[DirIndex].Append(FileName).ToUTF8, 'TSongs.FindFilesByExtension');
         SetLength(Files, Length(Files) + 1);
         Files[High(Files)] := DirList[DirIndex].Append(FileName);
         PumpLoadingEvents;
@@ -408,7 +412,7 @@ begin
   for DirIndex := 0 to SongPaths.Count - 1 do
   begin
     DirPath := SongPaths[DirIndex] as IPath;
-    Log.LogDebug('Searching directory ' + DirPath.ToWide + ' for txt files', 'TSongs.CollectSongFiles');
+    Log.LogDebug('Searching directory ' + DirPath.ToUTF8 + ' for txt files', 'TSongs.CollectSongFiles');
     DirList := CollectDirectories(DirPath, true, Self);
     AdditionalCount := Length(DirList);
     if AdditionalCount > 0 then
