@@ -4379,6 +4379,14 @@ begin
 end;
 
 procedure TScreenSong.SongScore;
+var
+  HasWebScores: boolean;
+  WebMaxScore: integer;
+  WebMediaScore: integer;
+  LocalMaxScore: integer;
+  LocalMediaScore: integer;
+  WebUserScore: UTF8String;
+  LocalUserScore: UTF8String;
   procedure setVisible(elements: array of integer; visible: boolean);
   var
     J: integer;
@@ -4395,8 +4403,32 @@ procedure TScreenSong.SongScore;
     setVisible(elements, true);
   end;
 begin
+  HasWebScores := High(DLLMan.Websites) >= 0;
+  WebMaxScore := 0;
+  WebMediaScore := 0;
+  WebUserScore := '';
 
-  if (CatSongs.Song[Interaction].isDuet) or (RapToFreestyle) or ((Mode <> smNormal) or (Ini.ShowScores = 0) or (CatSongs.Song[Interaction].Edition = '') or ((Ini.ShowScores = 1) and ((Text[TextMaxScore2].Text = '0') and (Text[TextMaxScoreLocal].Text = '0')))) then
+  if HasWebScores then
+  begin
+    WebMaxScore := DataBase.ReadMax_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level);
+    WebMediaScore := DataBase.ReadMedia_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level);
+    WebUserScore := DataBase.ReadUser_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level);
+
+    Text[TextScore].Text := UTF8Encode(DLLMan.Websites[Ini.ShowWebScore].Name);
+    Text[TextMaxScore2].Text := IntToStr(WebMaxScore);
+    Text[TextMediaScore2].Text := IntToStr(WebMediaScore);
+    Text[TextScoreUser].Text := WebUserScore;
+  end;
+
+  LocalMaxScore := DataBase.ReadMax_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level);
+  LocalMediaScore := DataBase.ReadMedia_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level);
+  LocalUserScore := DataBase.ReadUser_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level);
+
+  Text[TextMaxScoreLocal].Text := IntToStr(LocalMaxScore);
+  Text[TextMediaScoreLocal].Text := IntToStr(LocalMediaScore);
+  Text[TextScoreUserLocal].Text := LocalUserScore;
+
+  if (CatSongs.Song[Interaction].isDuet) or (RapToFreestyle) or ((Mode <> smNormal) or (Ini.ShowScores = 0) or (CatSongs.Song[Interaction].Edition = '') or ((Ini.ShowScores = 1) and (WebMaxScore = 0) and (LocalMaxScore = 0))) then
   begin
     hide([
       TextScore, TextMaxScore, TextMediaScore,
@@ -4406,8 +4438,7 @@ begin
   end
   else
   begin
-    // TODO: some of these if statements don't feel right? Like, unless ShowScores is inverted, most of these will still show them if there already is a score?
-    if (Ini.ShowScores = 1) and (Text[TextMaxScoreLocal].Text = '0') and (High(DLLMan.Websites) < 0) then
+    if (Ini.ShowScores = 1) and (LocalMaxScore = 0) and not HasWebScores then
     begin
       hide([TextScore, TextMaxScore, TextMediaScore]);
     end
@@ -4416,7 +4447,7 @@ begin
       show([TextScore, TextMaxScore, TextMediaScore]);
     end;
 
-    if (Ini.ShowScores = 1) and (Text[TextMaxScore2].Text = '0') then
+    if (Ini.ShowScores = 1) and (WebMaxScore = 0) then
     begin
       hide([TextScoreUser, TextMaxScore2, TextMediaScore2]);
     end
@@ -4425,7 +4456,7 @@ begin
       show([TextScoreUser, TextMaxScore2, TextMediaScore2]);
     end;
 
-    if (Ini.ShowScores = 1) and (Text[TextMaxScoreLocal].Text = '0') then
+    if (Ini.ShowScores = 1) and (LocalMaxScore = 0) then
     begin
       hide([TextScoreUserLocal, TextMaxScoreLocal, TextMediaScoreLocal]);
     end
@@ -4435,19 +4466,6 @@ begin
     end;
 
   end;
-
-  //Set score
-  if (High(DLLMan.Websites) >= 0) then
-  begin
-    Text[TextScore].Text       := UTF8Encode(DLLMan.Websites[Ini.ShowWebScore].Name);
-    Text[TextMaxScore2].Text   := IntToStr(DataBase.ReadMax_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level));
-    Text[TextMediaScore2].Text := IntToStr(DataBase.ReadMedia_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level));
-    Text[TextScoreUser].Text   := DataBase.ReadUser_Score(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, DllMan.Websites[Ini.ShowWebScore].ID, Player[0].Level);
-  end;
-
-  Text[TextMaxScoreLocal].Text   := IntToStr(DataBase.ReadMax_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level));
-  Text[TextMediaScoreLocal].Text := IntToStr(DataBase.ReadMedia_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level));
-  Text[TextScoreUserLocal].Text  := DataBase.ReadUser_ScoreLocal(CatSongs.Song[Interaction].Artist, CatSongs.Song[Interaction].Title, Player[0].Level);
 
 end;
 
