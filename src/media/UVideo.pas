@@ -133,6 +133,7 @@ type
     fTexWidth, fTexHeight: cardinal;
     fScaledWidth, fScaledHeight: cardinal;
     fSwScaleContext: PSwsContext;
+    fSwScaleSourceFormat: cint;
     fScreen:          integer; //actual screen to draw on
 
     fPosX:    double;
@@ -165,6 +166,7 @@ type
     function DecodeFrameForTime(CurrentTime, LoopTime: Extended): boolean;
     function PresentFrame(Frame: PAVFrame): boolean;
     function PresentSoftwareFrame(Frame: PAVFrame): boolean;
+    function EnsureSoftwareScaler(SourceFormat: TAVPixelFormat): boolean;
     procedure SynchronizeTime(Frame: PAVFrame; pts: double);
 
     procedure GetVideoRect(var ScreenRect, TexRect: TRectCoords);
@@ -657,25 +659,6 @@ begin
     Exit;
   end;
 
-  // if available get a SWScale-context -> faster than the deprecated img_convert().
-  // SWScale has accelerated support for PIX_FMT_RGB32/PIX_FMT_BGR24/PIX_FMT_BGR565/PIX_FMT_BGR555.
-  // Note: PIX_FMT_RGB32 is a BGR- and not an RGB-format (maybe a bug)!!!
-  // The BGR565-formats (GL_UNSIGNED_SHORT_5_6_5) is way too slow because of its
-  // bad OpenGL support. The BGR formats have MMX(2) implementations but no speed-up
-  // could be observed in comparison to the RGB versions.
-  fSwScaleContext := sws_getContext(
-      fCodecContext^.width, fCodecContext^.height,
-      fCodecContext^.pix_fmt,
-      fScaledWidth, fScaledHeight,
-      PIXEL_FMT_FFMPEG,
-      SWS_FAST_BILINEAR, nil, nil, nil);
-  if (fSwScaleContext = nil) then
-  begin
-    Log.LogError('Failed to get swscale context', 'TVideoPlayback_ffmpeg.Open');
-    Close();
-    Exit;
-  end;
-
   if (fPboEnabled) then
   begin
     glGetError();
@@ -721,6 +704,7 @@ begin
   fLoopTime := 0;
 
   fPboId := 0;
+  fSwScaleSourceFormat := -1;
 
   fScreen := 1;
 
@@ -770,6 +754,8 @@ begin
   fFormatContext := nil;
 
   sws_freeContext(fSwScaleContext);
+  fSwScaleContext := nil;
+  fSwScaleSourceFormat := -1;
 
   if (fPboId <> 0) then
     glDeleteBuffersARB(1, @fPboId);
@@ -1009,6 +995,29 @@ begin
   Result := PresentSoftwareFrame(Frame);
 end;
 
+function TVideo_FFmpeg.EnsureSoftwareScaler(SourceFormat: TAVPixelFormat): boolean;
+begin
+  Result := true;
+  if (fSwScaleContext <> nil) and (fSwScaleSourceFormat = Ord(SourceFormat)) then
+    Exit;
+
+  sws_freeContext(fSwScaleContext);
+  fSwScaleContext := sws_getContext(
+      fCodecContext^.width, fCodecContext^.height,
+      SourceFormat,
+      fScaledWidth, fScaledHeight,
+      PIXEL_FMT_FFMPEG,
+      SWS_FAST_BILINEAR, nil, nil, nil);
+  fSwScaleSourceFormat := Ord(SourceFormat);
+
+  if (fSwScaleContext = nil) then
+  begin
+    fSwScaleSourceFormat := -1;
+    Log.LogError('Failed to get swscale context', 'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+  end;
+end;
+
 function TVideo_FFmpeg.PresentSoftwareFrame(Frame: PAVFrame): boolean;
 var
   errnum: Integer;
@@ -1016,6 +1025,9 @@ var
   BufferPtr: PGLvoid;
 begin
   Result := false;
+
+  if not EnsureSoftwareScaler(fCodecContext^.pix_fmt) then
+    Exit;
 
   // otherwise we convert the pixeldata from YUV to RGB
   try
