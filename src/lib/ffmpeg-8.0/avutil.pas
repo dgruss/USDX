@@ -92,12 +92,24 @@ type
     AV_PIX_FMT_RGB24 = 2,
     AV_PIX_FMT_BGR24,
     AV_PIX_FMT_RGBA = 26,
-    AV_PIX_FMT_BGRA = 28
+    AV_PIX_FMT_BGRA = 28,
+    AV_PIX_FMT_VAAPI = 44
+  );
+  TAVHWDeviceType = (
+    AV_HWDEVICE_TYPE_NONE,
+    AV_HWDEVICE_TYPE_VDPAU,
+    AV_HWDEVICE_TYPE_CUDA,
+    AV_HWDEVICE_TYPE_VAAPI
   );
   TAVMediaType = (
     AVMEDIA_TYPE_VIDEO,
     AVMEDIA_TYPE_AUDIO
   );
+  PAVBufferRef = ^TAVBufferRef;
+  PPAVBufferRef = ^PAVBufferRef;
+  TAVBufferRef = record
+    do_not_instantiate_this_record: incomplete_record;
+  end;
   ppcuint8 = ^pcuint8;
   PAVFrame = ^TAVFrame;
   PPAVFrame = ^PAVFrame;
@@ -108,7 +120,7 @@ type
     we_do_not_use_width: cint;
     we_do_not_use_height: cint;
     nb_samples: cint;
-    we_do_not_use_format: cint;
+    format: cint;
     we_do_not_use_pict_type: cenum;
     we_do_not_use_sample_aspect_ratio: TAVRational;
     pts: cint64;
@@ -150,6 +162,11 @@ function av_frame_alloc(): PAVFrame; cdecl; external av__util;
 procedure av_frame_free(frame: PPAVFrame); cdecl; external av__util;
 function av_image_alloc(pointers: ppcuint8; linesizes: pcint; w: cint; h: cint; pix_fmt: TAVPixelFormat; align: cint): cint; cdecl; external av__util;
 function AVERROR(e: cint): cint; {$IFDEF HasInline}inline;{$ENDIF}
+function av_buffer_ref(buf: PAVBufferRef): PAVBufferRef; cdecl; external av__util;
+procedure av_buffer_unref(buf: PPAVBufferRef); cdecl; external av__util;
+function av_hwdevice_ctx_create(device_ctx: PPAVBufferRef; type_: TAVHWDeviceType; device: PAnsiChar; opts: PAVDictionary; flags: cint): cint; cdecl; external av__util;
+function av_hwdevice_get_type_name(type_: TAVHWDeviceType): PAnsiChar; cdecl; external av__util;
+function av_hwframe_transfer_data(dst: PAVFrame; src: PAVFrame; flags: cint): cint; cdecl; external av__util;
 function av_opt_set_int(obj: pointer; name: PAnsiChar; val: cint64; search_flags: cint): cint; cdecl; external av__util;
 function av_opt_set_chlayout(obj: pointer; name: PAnsiChar; layout: PAVChannelLayout; search_flags: cint): cint; cdecl; external av__util;
 function av_opt_set_sample_fmt(obj: pointer; name: PAnsiChar; fmt: TAVSampleFormat; search_flags: cint): cint; cdecl; external av__util;

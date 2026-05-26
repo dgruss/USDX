@@ -23,6 +23,10 @@ uses
 
 const
   FF_BUG_AUTODETECT = 1;
+  AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX = $01;
+  AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX = $02;
+  AV_CODEC_HW_CONFIG_METHOD_INTERNAL      = $04;
+  AV_CODEC_HW_CONFIG_METHOD_AD_HOC        = $08;
   AV_PKT_DATA_SKIP_SAMPLES = 11;
 type
   TAVCodecID = (
@@ -33,6 +37,12 @@ type
     AV_CODEC_CONFIG_PIX_FORMAT
   );
   TAVPacketSideDataType = cenum;
+  PAVCodecHWConfig = ^TAVCodecHWConfig;
+  TAVCodecHWConfig = record
+    pix_fmt: TAVPixelFormat;
+    methods: cint;
+    device_type: TAVHWDeviceType;
+  end;
   PAVPacket = ^TAVPacket;
   PPAVPacket = ^PAVPacket;
   TAVPacket = record
@@ -187,8 +197,8 @@ type
     we_do_not_use_err_recognition: cint;
     we_do_not_use_hwaccel: pointer;
     we_do_not_use_hwaccel_context: pointer;
-    we_do_not_use_hw_frames_ctx: pointer;
-    we_do_not_use_hw_device_ctx: pointer;
+    hw_frames_ctx: PAVBufferRef;
+    hw_device_ctx: PAVBufferRef;
     we_do_not_use_hwaccel_flags: cint;
     we_do_not_use_extra_hw_frames: cint;
     we_do_not_use_error: array [0..AV_NUM_DATA_POINTERS-1] of cuint64;
@@ -207,6 +217,7 @@ function av_codec_iterate(opaque: ppointer): PAVCodec; cdecl; external av__codec
 function avcodec_find_decoder(id: TAVCodecID): PAVCodec; cdecl; external av__codec;
 function avcodec_find_decoder_by_name(name: PAnsiChar): PAVCodec; cdecl; external av__codec;
 function avcodec_descriptor_get(id: TAVCodecID): PAVCodecDescriptor; cdecl; external av__codec;
+function avcodec_get_hw_config(codec: PAVCodec; index: cint): PAVCodecHWConfig; cdecl; external av__codec;
 function avcodec_open2(avctx: PAVCodecContext; codec: PAVCodec; options: PPAVDictionary): cint; cdecl; external av__codec;
 procedure avcodec_flush_buffers(avctx: PAVCodecContext); cdecl; external av__codec;
 function avcodec_receive_frame(avctx: PAVCodecContext; frame: PAVFrame): cint; cdecl; external av__codec;
