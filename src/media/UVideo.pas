@@ -636,8 +636,6 @@ end;
 
 procedure TVideo_FFmpeg.ReleaseVAAPI();
 begin
-  if fCodecContext <> nil then
-    av_buffer_unref(@fCodecContext^.hw_device_ctx);
   if fVAAPIDeviceContext <> nil then
     av_buffer_unref(@fVAAPIDeviceContext);
   fVAAPIEnabled := false;
