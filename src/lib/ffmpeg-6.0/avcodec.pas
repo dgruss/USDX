@@ -50,6 +50,10 @@ const
 
 const
   FF_BUG_AUTODETECT = 1;
+  AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX = $01;
+  AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX = $02;
+  AV_CODEC_HW_CONFIG_METHOD_INTERNAL      = $04;
+  AV_CODEC_HW_CONFIG_METHOD_AD_HOC        = $08;
   AV_PKT_DATA_SKIP_SAMPLES = 11;
 type
   TAVCodecID = (
@@ -57,6 +61,12 @@ type
     AV_CODEC_ID_OPUS = $1503c
   );
   TAVPacketSideDataType = cenum;
+  PAVCodecHWConfig = ^TAVCodecHWConfig;
+  TAVCodecHWConfig = record
+    pix_fmt: TAVPixelFormat;
+    methods: cint;
+    device_type: TAVHWDeviceType;
+  end;
   PAVPacket = ^TAVPacket;
   PPAVPacket = ^PAVPacket;
   TAVPacket = record
@@ -233,6 +243,27 @@ type
     we_do_not_use_subtitle_header_size: cint;
     we_do_not_use_initial_padding: cint;
     framerate: TAVRational;
+    we_do_not_use_sw_pix_fmt: TAVPixelFormat;
+    we_do_not_use_pkt_timebase: TAVRational;
+    we_do_not_use_codec_descriptor: PAVCodecDescriptor;
+    we_do_not_use_pts_correction_num_faulty_pts: cint64;
+    we_do_not_use_pts_correction_num_faulty_dts: cint64;
+    we_do_not_use_pts_correction_last_pts: cint64;
+    we_do_not_use_pts_correction_last_dts: cint64;
+    we_do_not_use_sub_charenc: pcchar;
+    we_do_not_use_sub_charenc_mode: cint;
+    we_do_not_use_skip_alpha: cint;
+    we_do_not_use_seek_preroll: cint;
+    we_do_not_use_chroma_intra_matrix: pcuint16;
+    we_do_not_use_dump_separator: pcuint8;
+    we_do_not_use_codec_whitelist: pcchar;
+    we_do_not_use_properties: cuint;
+    we_do_not_use_coded_side_data: pointer;
+    we_do_not_use_nb_coded_side_data: cint;
+    hw_frames_ctx: PAVBufferRef;
+    we_do_not_use_trailing_padding: cint;
+    we_do_not_use_max_pixels: cint64;
+    hw_device_ctx: PAVBufferRef;
     do_not_instantiate_this_record: incomplete_record;
   end;
 function av_packet_ref(dst: PAVPacket; src: PAVPacket): cint; cdecl; external av__codec;
@@ -243,6 +274,7 @@ function av_codec_iterate(opaque: ppointer): PAVCodec; cdecl; external av__codec
 function avcodec_find_decoder(id: TAVCodecID): PAVCodec; cdecl; external av__codec;
 function avcodec_find_decoder_by_name(name: PAnsiChar): PAVCodec; cdecl; external av__codec;
 function avcodec_descriptor_get(id: TAVCodecID): PAVCodecDescriptor; cdecl; external av__codec;
+function avcodec_get_hw_config(codec: PAVCodec; index: cint): PAVCodecHWConfig; cdecl; external av__codec;
 function avcodec_open2(avctx: PAVCodecContext; codec: PAVCodec; options: PPAVDictionary): cint; cdecl; external av__codec;
 function avcodec_close(avctx: PAVCodecContext): cint; cdecl; external av__codec;
 procedure avcodec_flush_buffers(avctx: PAVCodecContext); cdecl; external av__codec;
