@@ -81,6 +81,10 @@ uses
 //{$DEFINE PIXEL_FMT_BGR}
 //{$DEFINE PIXEL_FMT_32BITS}
 
+{$IF Defined(Linux) and (LIBAVCODEC_VERSION_MAJOR >= 61) and (LIBAVUTIL_VERSION_MAJOR >= 59)}
+  {$DEFINE FFMPEG_VAAPI}
+{$ENDIF}
+
 const
 {$IFDEF PIXEL_FMT_32BITS}
   PIXEL_FMT_SIZE   = 4;
@@ -127,6 +131,11 @@ type
 
     fAVFrame:     PAVFrame;
     fAVFrameRGB:  PAVFrame;
+    {$IFDEF FFMPEG_VAAPI}
+    fVAAPITransferFrame: PAVFrame;
+    fVAAPIDeviceContext: PAVBufferRef;
+    fVAAPIEnabled: boolean;
+    {$ENDIF}
 
     fFrameTex:    GLuint; //**< OpenGL texture for FrameBuffer
     fFrameTexValid: boolean; //**< if true, fFrameTex contains the current frame
@@ -160,6 +169,15 @@ type
     fPboEnabled: boolean;
     fPboId:      GLuint;
     procedure Reset();
+    function OpenCodecContext(Codec: PAVCodec; UseVAAPI: boolean; out ErrorNumber: Integer): boolean;
+    procedure ReleaseCodecContext();
+    {$IFDEF FFMPEG_VAAPI}
+    function CodecSupportsVAAPI(Codec: PAVCodec): boolean;
+    function ConfigureVAAPI(Codec: PAVCodec): boolean;
+    procedure ReleaseVAAPI();
+    function PresentVAAPIFrame(Frame: PAVFrame): boolean;
+    function ReopenSoftwareDecoderAt(Time: Extended): boolean;
+    {$ENDIF}
     function DecodeFrame(): boolean;
     function GetSyncedVideoTime(Time: Extended): Extended;
     function ShouldReuseCurrentFrame(Time, CurrentTime: Extended): boolean;
@@ -253,7 +271,7 @@ begin
     Result := true;
 end;
 
-function SelectFormat(CodecCtx: PAVCodecContext; Formats: PAVPixelFormat): TAVPixelFormat; cdecl;
+function SelectSoftwareFormat(Formats: PAVPixelFormat): TAVPixelFormat;
 begin
   while ord(Formats^) <> -1 do
   begin
@@ -262,6 +280,34 @@ begin
     Inc(Formats);
   end;
   Result := Formats^;
+end;
+
+function SelectFormat(CodecCtx: PAVCodecContext; Formats: PAVPixelFormat): TAVPixelFormat; cdecl;
+{$IFDEF FFMPEG_VAAPI}
+var
+  Candidate: PAVPixelFormat;
+{$ENDIF}
+begin
+  {$IFDEF FFMPEG_VAAPI}
+  if (CodecCtx <> nil) and (CodecCtx^.hw_device_ctx <> nil) then
+  begin
+    Candidate := Formats;
+    while ord(Candidate^) <> -1 do
+    begin
+      if Candidate^ = AV_PIX_FMT_VAAPI then
+      begin
+        Log.LogInfo('Using VAAPI hardware pixel format', 'TVideoPlayback_ffmpeg.SelectFormat');
+        Result := Candidate^;
+        Exit;
+      end;
+      Inc(Candidate);
+    end;
+    Log.LogInfo('VAAPI was requested but the decoder did not offer a VAAPI pixel format; using software output',
+        'TVideoPlayback_ffmpeg.SelectFormat');
+  end;
+  {$ENDIF}
+
+  Result := SelectSoftwareFormat(Formats);
 end;
 
 function IsCodecUsable(Codec: PAVCodec): boolean;
@@ -430,6 +476,201 @@ begin
   glDeleteTextures(1, PGLuint(@fFrameTex));
 end;
 
+procedure TVideo_FFmpeg.ReleaseCodecContext();
+begin
+  {$IFDEF FFMPEG_VAAPI}
+  ReleaseVAAPI();
+  {$ENDIF}
+
+  if (fCodecContext <> nil) then
+  begin
+    // avcodec_close() is not thread-safe
+    FFmpegCore.LockAVCodec();
+    try
+      {$IF LIBAVFORMAT_VERSION < 59000000}
+      avcodec_close(fCodecContext);
+      {$ELSE}
+      avcodec_free_context(@fCodecContext);
+      {$ENDIF}
+    finally
+      FFmpegCore.UnlockAVCodec();
+    end;
+  end;
+
+  {$IF LIBAVFORMAT_VERSION < 59000000}
+  fCodecContext := nil;
+  {$ENDIF}
+end;
+
+function TVideo_FFmpeg.OpenCodecContext(Codec: PAVCodec; UseVAAPI: boolean; out ErrorNumber: Integer): boolean;
+{$IFDEF FFMPEG_VAAPI}
+var
+  VAAPIConfigured: boolean;
+{$ENDIF}
+begin
+  Result := false;
+  ErrorNumber := -1;
+  {$IFDEF FFMPEG_VAAPI}
+  VAAPIConfigured := false;
+  {$ENDIF}
+
+  fCodecContext := FFmpegCore.GetCodecContext(fStream, Codec);
+  if fCodecContext = nil then
+    Exit;
+
+  fCodecContext^.get_format := @SelectFormat;
+
+  // set debug options
+  fCodecContext^.debug := 0;
+
+  // detect bug-workarounds automatically
+  fCodecContext^.workaround_bugs := FF_BUG_AUTODETECT;
+  // error resilience strategy (careful/compliant/agressive/very_aggressive)
+  //fCodecContext^.error_resilience := FF_ER_CAREFUL; //FF_ER_COMPLIANT;
+  // allow non spec compliant speedup tricks.
+
+  //fCodecContext^.flags2 := CODEC_FLAG2_FAST;
+
+  {$IFDEF FFMPEG_VAAPI}
+  if UseVAAPI then
+    VAAPIConfigured := ConfigureVAAPI(Codec);
+  {$ENDIF}
+
+  // Note: avcodec_open() and avcodec_close() are not thread-safe and will
+  // fail if called concurrently by different threads.
+  FFmpegCore.LockAVCodec();
+  try
+    // by setting this explicitly to 0, it won't default to a single thread
+    fCodecContext^.thread_count := 0;
+
+    ErrorNumber := avcodec_open2(fCodecContext, Codec, nil);
+  finally
+    FFmpegCore.UnlockAVCodec();
+  end;
+
+  if ErrorNumber >= 0 then
+  begin
+    fCodec := Codec;
+    Result := true;
+    Exit;
+  end;
+
+  {$IFDEF FFMPEG_VAAPI}
+  if VAAPIConfigured then
+  begin
+    Log.LogInfo('VAAPI decoder open failed for ' + Codec^.name + ': ' +
+        FFmpegCore.GetErrorString(ErrorNumber) + '; falling back to software',
+        'TVideoPlayback_ffmpeg.Open');
+    ReleaseCodecContext();
+    Result := OpenCodecContext(Codec, false, ErrorNumber);
+    Exit;
+  end;
+  {$ENDIF}
+
+  ReleaseCodecContext();
+end;
+
+{$IFDEF FFMPEG_VAAPI}
+function TVideo_FFmpeg.CodecSupportsVAAPI(Codec: PAVCodec): boolean;
+var
+  Config: PAVCodecHWConfig;
+  Index: cint;
+begin
+  Result := false;
+  Index := 0;
+  while true do
+  begin
+    Config := avcodec_get_hw_config(Codec, Index);
+    if Config = nil then
+      Exit;
+
+    if ((Config^.methods and AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) <> 0) and
+       (Config^.device_type = AV_HWDEVICE_TYPE_VAAPI) and
+       (Config^.pix_fmt = AV_PIX_FMT_VAAPI) then
+    begin
+      Result := true;
+      Exit;
+    end;
+
+    Inc(Index);
+  end;
+end;
+
+function TVideo_FFmpeg.ConfigureVAAPI(Codec: PAVCodec): boolean;
+var
+  ErrorNumber: Integer;
+begin
+  Result := false;
+
+  if not CodecSupportsVAAPI(Codec) then
+    Exit;
+
+  ErrorNumber := av_hwdevice_ctx_create(
+      @fVAAPIDeviceContext,
+      AV_HWDEVICE_TYPE_VAAPI,
+      nil,
+      nil,
+      0);
+  if ErrorNumber < 0 then
+  begin
+    Log.LogInfo('VAAPI unavailable for ' + Codec^.name + ': ' +
+        FFmpegCore.GetErrorString(ErrorNumber) + '; falling back to software',
+        'TVideoPlayback_ffmpeg.Open');
+    Exit;
+  end;
+
+  fCodecContext^.hw_device_ctx := av_buffer_ref(fVAAPIDeviceContext);
+  if fCodecContext^.hw_device_ctx = nil then
+  begin
+    Log.LogInfo('VAAPI unavailable for ' + Codec^.name +
+        ': unable to reference device context; falling back to software',
+        'TVideoPlayback_ffmpeg.Open');
+    ReleaseVAAPI();
+    Exit;
+  end;
+
+  fVAAPIEnabled := true;
+  Log.LogInfo('Trying VAAPI hardware decoding with ' + Codec^.name, 'TVideoPlayback_ffmpeg.Open');
+  Result := true;
+end;
+
+procedure TVideo_FFmpeg.ReleaseVAAPI();
+begin
+  if fCodecContext <> nil then
+    av_buffer_unref(@fCodecContext^.hw_device_ctx);
+  if fVAAPIDeviceContext <> nil then
+    av_buffer_unref(@fVAAPIDeviceContext);
+  fVAAPIEnabled := false;
+end;
+
+function TVideo_FFmpeg.ReopenSoftwareDecoderAt(Time: Extended): boolean;
+var
+  ErrorNumber: Integer;
+begin
+  Result := false;
+
+  Log.LogInfo('VAAPI presentation failed; falling back to software decoder',
+      'TVideoPlayback_ffmpeg.GetFrame');
+
+  ReleaseCodecContext();
+  sws_freeContext(fSwScaleContext);
+  fSwScaleContext := nil;
+  fSwScaleSourceFormat := -1;
+
+  if not OpenCodecContext(fCodec, false, ErrorNumber) then
+  begin
+    Log.LogError('Software decoder fallback failed: ' +
+        FFmpegCore.GetErrorString(ErrorNumber), 'TVideoPlayback_ffmpeg.GetFrame');
+    Exit;
+  end;
+
+  fEOF := false;
+  fFrameTexValid := false;
+  SetPosition(Time);
+  Result := true;
+end;
+{$ENDIF}
+
 function TVideo_FFmpeg.Open(const FileName : IPath): boolean;
 var
   errnum: Integer;
@@ -527,40 +768,15 @@ begin
     if fCodec = nil then
       continue;
 
-    fCodecContext := FFmpegCore.GetCodecContext(fStream, fCodec);
-    if fCodecContext = nil then
-      continue;
-
-    fCodecContext^.get_format := @SelectFormat;
-
-    // set debug options
-    fCodecContext^.debug := 0;
-
-    // detect bug-workarounds automatically
-    fCodecContext^.workaround_bugs := FF_BUG_AUTODETECT;
-    // error resilience strategy (careful/compliant/agressive/very_aggressive)
-    //fCodecContext^.error_resilience := FF_ER_CAREFUL; //FF_ER_COMPLIANT;
-    // allow non spec compliant speedup tricks.
-
-    //fCodecContext^.flags2 := CODEC_FLAG2_FAST;
-
-    // Note: avcodec_open() and avcodec_close() are not thread-safe and will
-    // fail if called concurrently by different threads.
-    FFmpegCore.LockAVCodec();
-    try
-        // by setting this explicitly to 0, it won't default to a single thread
-        fCodecContext^.thread_count := 0;
-
-        errnum := avcodec_open2(fCodecContext, fCodec, nil);
-    finally
-      FFmpegCore.UnlockAVCodec();
-    end;
-    if errnum >= 0 then
+    {$IFDEF FFMPEG_VAAPI}
+    if OpenCodecContext(fCodec, true, errnum) then
       Break;
-    Log.LogError('Error ' + IntToStr(errnum) + ' returned by ' + fCodec^.name, 'TVideoPlayback_ffmpeg.Open');
-    {$IF LIBAVFORMAT_VERSION >= 59000000}
-    avcodec_free_context(@fCodecContext);
+    {$ELSE}
+    if OpenCodecContext(fCodec, false, errnum) then
+      Break;
     {$ENDIF}
+
+    Log.LogError('Error ' + IntToStr(errnum) + ' returned by ' + fCodec^.name, 'TVideoPlayback_ffmpeg.Open');
   end;
   if (errnum < 0) then
   begin
@@ -569,7 +785,14 @@ begin
     Exit;
   end
   else
+  begin
+    {$IFDEF FFMPEG_VAAPI}
+    if fVAAPIEnabled then
+      Log.LogInfo('Using ' + fCodec^.name + ' codec with VAAPI', 'TVideoPlayback_ffmpeg.Open')
+    else
+    {$ENDIF}
     Log.LogInfo('Using ' + fCodec^.name + ' codec', 'TVideoPlayback_ffmpeg.Open');
+  end;
 
   {$ifdef DebugDisplay}
   DebugWriteln('Found a matching Codec: '+ fCodecContext^.Codec.Name + sLineBreak +
@@ -705,6 +928,11 @@ begin
 
   fPboId := 0;
   fSwScaleSourceFormat := -1;
+  {$IFDEF FFMPEG_VAAPI}
+  fVAAPIDeviceContext := nil;
+  fVAAPITransferFrame := nil;
+  fVAAPIEnabled := false;
+  {$ENDIF}
 
   fScreen := 1;
 
@@ -729,28 +957,15 @@ begin
     av_freep(@fAVFrameRGB^.data[0]);
   av_freep(@fAVFrameRGB);
   av_frame_free(@fAVFrame);
+  {$IFDEF FFMPEG_VAAPI}
+  av_frame_free(@fVAAPITransferFrame);
+  {$ENDIF}
 
-  if (fCodecContext <> nil) then
-  begin
-    // avcodec_close() is not thread-safe
-    FFmpegCore.LockAVCodec();
-    try
-      {$IF LIBAVFORMAT_VERSION < 59000000)}
-      avcodec_close(fCodecContext);
-      {$ELSE}
-      avcodec_free_context(@fCodecContext);
-      {$ENDIF}
-    finally
-      FFmpegCore.UnlockAVCodec();
-    end;
-  end;
+  ReleaseCodecContext();
 
   if (fFormatContext <> nil) then
     FFmpegCore.AVFormatCloseInput(@fFormatContext);
 
-  {$IF LIBAVFORMAT_VERSION < 59000000)}
-  fCodecContext  := nil;
-  {$ENDIF}
   fFormatContext := nil;
 
   sws_freeContext(fSwScaleContext);
@@ -992,8 +1207,45 @@ end;
 
 function TVideo_FFmpeg.PresentFrame(Frame: PAVFrame): boolean;
 begin
+  {$IFDEF FFMPEG_VAAPI}
+  if fVAAPIEnabled and (Frame^.format = Ord(AV_PIX_FMT_VAAPI)) then
+  begin
+    Result := PresentVAAPIFrame(Frame);
+    Exit;
+  end;
+  {$ENDIF}
+
   Result := PresentSoftwareFrame(Frame);
 end;
+
+{$IFDEF FFMPEG_VAAPI}
+function TVideo_FFmpeg.PresentVAAPIFrame(Frame: PAVFrame): boolean;
+var
+  ErrorNumber: Integer;
+begin
+  Result := false;
+
+  if fVAAPITransferFrame = nil then
+    fVAAPITransferFrame := av_frame_alloc();
+  if fVAAPITransferFrame = nil then
+  begin
+    Log.LogError('Failed to allocate VAAPI transfer frame', 'TVideoPlayback_ffmpeg.GetFrame');
+    Exit;
+  end;
+
+  av_frame_unref(fVAAPITransferFrame);
+  ErrorNumber := av_hwframe_transfer_data(fVAAPITransferFrame, Frame, 0);
+  if ErrorNumber < 0 then
+  begin
+    Log.LogInfo('VAAPI frame transfer failed: ' +
+        FFmpegCore.GetErrorString(ErrorNumber), 'TVideoPlayback_ffmpeg.GetFrame');
+    Exit;
+  end;
+
+  Result := PresentSoftwareFrame(fVAAPITransferFrame);
+  av_frame_unref(fVAAPITransferFrame);
+end;
+{$ENDIF}
 
 function TVideo_FFmpeg.EnsureSoftwareScaler(SourceFormat: TAVPixelFormat): boolean;
 begin
@@ -1023,10 +1275,17 @@ var
   errnum: Integer;
   glErr: GLenum;
   BufferPtr: PGLvoid;
+  SourceFormat: TAVPixelFormat;
 begin
   Result := false;
 
-  if not EnsureSoftwareScaler(fCodecContext^.pix_fmt) then
+  SourceFormat := fCodecContext^.pix_fmt;
+  {$IFDEF FFMPEG_VAAPI}
+  if fVAAPIEnabled and (Frame^.format >= 0) then
+    SourceFormat := TAVPixelFormat(Frame^.format);
+  {$ENDIF}
+
+  if not EnsureSoftwareScaler(SourceFormat) then
     Exit;
 
   // otherwise we convert the pixeldata from YUV to RGB
@@ -1162,7 +1421,16 @@ begin
   //end;
 
   if not PresentFrame(fAVFrame) then
+  begin
+    {$IFDEF FFMPEG_VAAPI}
+    if fVAAPIEnabled and ReopenSoftwareDecoderAt(CurrentTime) then
+    begin
+      if DecodeFrameForTime(CurrentTime, Time) then
+        PresentFrame(fAVFrame);
+    end;
+    {$ENDIF}
     Exit;
+  end;
 end;
 
 procedure TVideo_FFmpeg.GetVideoRect(var ScreenRect, TexRect: TRectCoords);

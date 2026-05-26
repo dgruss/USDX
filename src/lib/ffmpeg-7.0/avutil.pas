@@ -188,6 +188,7 @@ function av_malloc(size: csize_t): pointer; cdecl; external av__util;
 function avutil_version(): cuint; cdecl; external av__util;
 function av_frame_alloc(): PAVFrame; cdecl; external av__util;
 procedure av_frame_free(frame: PPAVFrame); cdecl; external av__util;
+procedure av_frame_unref(frame: PAVFrame); cdecl; external av__util;
 function av_image_alloc(pointers: ppcuint8; linesizes: pcint; w: cint; h: cint; pix_fmt: TAVPixelFormat; align: cint): cint; cdecl; external av__util;
 function AVERROR(e: cint): cint; {$IFDEF HasInline}inline;{$ENDIF}
 function av_buffer_ref(buf: PAVBufferRef): PAVBufferRef; cdecl; external av__util;
