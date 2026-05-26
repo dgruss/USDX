@@ -160,6 +160,11 @@ type
     fPboId:      GLuint;
     procedure Reset();
     function DecodeFrame(): boolean;
+    function GetSyncedVideoTime(Time: Extended): Extended;
+    function ShouldReuseCurrentFrame(Time, CurrentTime: Extended): boolean;
+    function DecodeFrameForTime(CurrentTime, LoopTime: Extended): boolean;
+    function PresentFrame(Frame: PAVFrame): boolean;
+    function PresentSoftwareFrame(Frame: PAVFrame): boolean;
     procedure SynchronizeTime(Frame: PAVFrame; pts: double);
 
     procedure GetVideoRect(var ScreenRect, TexRect: TRectCoords);
@@ -903,75 +908,64 @@ begin
   Result := true;
 end;
 
-procedure TVideo_FFmpeg.GetFrame(Time: Extended);
+function TVideo_FFmpeg.GetSyncedVideoTime(Time: Extended): Extended;
+begin
+  // requested stream position (relative to the last loop's start)
+  if (fLoop) then
+    Result := Time - fLoopTime
+  else
+    Result := Time;
+end;
+
+function TVideo_FFmpeg.ShouldReuseCurrentFrame(Time, CurrentTime: Extended): boolean;
 var
-  errnum: Integer;
-  glErr: GLenum;
-  CurrentTime: Extended;
+  TimeDiff: Extended;
+begin
+  Result := false;
+
+  if (not fFrameTexValid) then
+    Exit;
+
+  // time since the last frame was returned
+  TimeDiff := CurrentTime - fFrameTime;
+
+  {$IFDEF DebugDisplay}
+  DebugWriteln('Time:      '+inttostr(floor(Time*1000)) + sLineBreak +
+               'VideoTime: '+inttostr(floor(fFrameTime*1000)) + sLineBreak +
+               'TimeBase:  '+inttostr(floor(fFrameDuration*1000)) + sLineBreak +
+               'TimeDiff:  '+inttostr(floor(TimeDifference*1000)));
+  {$endif}
+
+  // check if time has reached the next frame
+  if (TimeDiff < fFrameDuration) then
+  begin
+    {$ifdef DebugFrames}
+    // frame delay debug display
+    GoldenRec.Spawn(200,15,1,16,0,-1,ColoredStar,$00ff00);
+    {$endif}
+
+    {$IFDEF DebugDisplay}
+    DebugWriteln('not getting new frame' + sLineBreak +
+        'Time:      '+inttostr(floor(Time*1000)) + sLineBreak +
+        'VideoTime: '+inttostr(floor(fFrameTime*1000)) + sLineBreak +
+        'TimeBase:  '+inttostr(floor(fFrameDuration*1000)) + sLineBreak +
+        'TimeDiff:  '+inttostr(floor(TimeDifference*1000)));
+    {$endif}
+
+    Result := true;
+  end;
+end;
+
+function TVideo_FFmpeg.DecodeFrameForTime(CurrentTime, LoopTime: Extended): boolean;
+var
   TimeDiff: Extended;
   DropFrameCount: Integer;
   i: Integer;
-  Success: boolean;
-  BufferPtr: PGLvoid;
 const
   SKIP_FRAME_DIFF = 0.010; // start skipping if we are >= 10ms too late
 begin
-  if not fOpened then
-    Exit;
-
-  if fPaused then
-    Exit;
-
-  {*
-   * Synchronization - begin
-   *}
-
-  // requested stream position (relative to the last loop's start)
-  if (fLoop) then
-    CurrentTime := Time - fLoopTime
-  else
-    CurrentTime := Time;
-
-  // check if current texture still contains the active frame
-  if (fFrameTexValid) then
-  begin
-    // time since the last frame was returned
-    TimeDiff := CurrentTime - fFrameTime;
-
-    {$IFDEF DebugDisplay}
-    DebugWriteln('Time:      '+inttostr(floor(Time*1000)) + sLineBreak +
-                 'VideoTime: '+inttostr(floor(fFrameTime*1000)) + sLineBreak +
-                 'TimeBase:  '+inttostr(floor(fFrameDuration*1000)) + sLineBreak +
-                 'TimeDiff:  '+inttostr(floor(TimeDifference*1000)));
-    {$endif}
-
-    // check if time has reached the next frame
-    if (TimeDiff < fFrameDuration) then
-    begin
-      {$ifdef DebugFrames}
-      // frame delay debug display
-      GoldenRec.Spawn(200,15,1,16,0,-1,ColoredStar,$00ff00);
-      {$endif}
-
-      {$IFDEF DebugDisplay}
-      DebugWriteln('not getting new frame' + sLineBreak +
-          'Time:      '+inttostr(floor(Time*1000)) + sLineBreak +
-          'VideoTime: '+inttostr(floor(fFrameTime*1000)) + sLineBreak +
-          'TimeBase:  '+inttostr(floor(fFrameDuration*1000)) + sLineBreak +
-          'TimeDiff:  '+inttostr(floor(TimeDifference*1000)));
-      {$endif}
-
-      // we do not need a new frame now
-      Exit;
-    end;
-  end;
-
-  {$IFDEF VideoBenchmark}
-  Log.BenchmarkStart(15);
-  {$ENDIF}
-
   // fetch new frame (updates fFrameTime)
-  Success := DecodeFrame();
+  Result := DecodeFrame();
   TimeDiff := CurrentTime - fFrameTime;
 
   // check if we have to skip frames
@@ -996,41 +990,40 @@ begin
 
     // skip frames
     for i := 1 to DropFrameCount do
-      Success := DecodeFrame();
+      Result := DecodeFrame();
   end;
 
   // check if we got an EOF or error
-  if (not Success) then
+  if (not Result) and fLoop then
   begin
-    if fLoop then
-    begin
-      // we have to loop, so rewind
-      SetPosition(0);
-      // record the start-time of the current loop, so we can
-      // determine the position in the stream (fFrameTime-fLoopTime) later.
-      fLoopTime := Time;
-    end;
-    Exit;
+    // we have to loop, so rewind
+    SetPosition(0);
+    // record the start-time of the current loop, so we can
+    // determine the position in the stream (fFrameTime-fLoopTime) later.
+    fLoopTime := LoopTime;
   end;
+end;
 
-  {*
-   * Synchronization - end
-   *}
+function TVideo_FFmpeg.PresentFrame(Frame: PAVFrame): boolean;
+begin
+  Result := PresentSoftwareFrame(Frame);
+end;
 
-  // TODO: support for pan&scan
-  //if (fAVFrame.pan_scan <> nil) then
-  //begin
-  //  Writeln(Format('PanScan: %d/%d', [fAVFrame.pan_scan.width, fAVFrame.pan_scan.height]));
-  //end;
+function TVideo_FFmpeg.PresentSoftwareFrame(Frame: PAVFrame): boolean;
+var
+  errnum: Integer;
+  glErr: GLenum;
+  BufferPtr: PGLvoid;
+begin
+  Result := false;
 
   // otherwise we convert the pixeldata from YUV to RGB
   try
-
-  errnum := sws_scale(fSwScaleContext, @fAVFrame.data, @fAVFrame.linesize,
-          0, fCodecContext^.Height,
-          @fAVFrameRGB.data, @fAVFrameRGB.linesize);
+    errnum := sws_scale(fSwScaleContext, @Frame.data, @Frame.linesize,
+            0, fCodecContext^.Height,
+            @fAVFrameRGB.data, @fAVFrameRGB.linesize);
   except
-    ;
+    errnum := -1;
   end;
 
   {$IF LIBSWSCALE_VERSION < 8003000}
@@ -1117,6 +1110,47 @@ begin
   Log.LogBenchmark('FFmpeg', 15);
   Log.LogBenchmark('Texture', 16);
   {$ENDIF}
+
+  Result := true;
+end;
+
+procedure TVideo_FFmpeg.GetFrame(Time: Extended);
+var
+  CurrentTime: Extended;
+begin
+  if not fOpened then
+    Exit;
+
+  if fPaused then
+    Exit;
+
+  {*
+   * Synchronization - begin
+   *}
+
+  CurrentTime := GetSyncedVideoTime(Time);
+  if ShouldReuseCurrentFrame(Time, CurrentTime) then
+    Exit;
+
+  {$IFDEF VideoBenchmark}
+  Log.BenchmarkStart(15);
+  {$ENDIF}
+
+  if not DecodeFrameForTime(CurrentTime, Time) then
+    Exit;
+
+  {*
+   * Synchronization - end
+   *}
+
+  // TODO: support for pan&scan
+  //if (fAVFrame.pan_scan <> nil) then
+  //begin
+  //  Writeln(Format('PanScan: %d/%d', [fAVFrame.pan_scan.width, fAVFrame.pan_scan.height]));
+  //end;
+
+  if not PresentFrame(fAVFrame) then
+    Exit;
 end;
 
 procedure TVideo_FFmpeg.GetVideoRect(var ScreenRect, TexRect: TRectCoords);
