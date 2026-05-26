@@ -135,6 +135,7 @@ type
     fVAAPITransferFrame: PAVFrame;
     fVAAPIDeviceContext: PAVBufferRef;
     fVAAPIEnabled: boolean;
+    fVAAPIHardwareFrames: boolean;
     {$ENDIF}
 
     fFrameTex:    GLuint; //**< OpenGL texture for FrameBuffer
@@ -639,6 +640,7 @@ begin
   if fVAAPIDeviceContext <> nil then
     av_buffer_unref(@fVAAPIDeviceContext);
   fVAAPIEnabled := false;
+  fVAAPIHardwareFrames := false;
 end;
 
 function TVideo_FFmpeg.ReopenSoftwareDecoderAt(Time: Extended): boolean;
@@ -786,8 +788,8 @@ begin
   begin
     {$IFDEF FFMPEG_VAAPI}
     if fVAAPIEnabled then
-      Log.LogInfo('Using ' + fCodec^.name + ' codec with VAAPI', 'TVideoPlayback_ffmpeg.Open')
-    else
+      Log.LogInfo('VAAPI hardware decoding is configured for ' + fCodec^.name + ' codec',
+          'TVideoPlayback_ffmpeg.Open');
     {$ENDIF}
     Log.LogInfo('Using ' + fCodec^.name + ' codec', 'TVideoPlayback_ffmpeg.Open');
   end;
@@ -930,6 +932,7 @@ begin
   fVAAPIDeviceContext := nil;
   fVAAPITransferFrame := nil;
   fVAAPIEnabled := false;
+  fVAAPIHardwareFrames := false;
   {$ENDIF}
 
   fScreen := 1;
@@ -1208,6 +1211,12 @@ begin
   {$IFDEF FFMPEG_VAAPI}
   if fVAAPIEnabled and (Frame^.format = Ord(AV_PIX_FMT_VAAPI)) then
   begin
+    if not fVAAPIHardwareFrames then
+    begin
+      Log.LogInfo('Using VAAPI hardware frames via CPU transfer',
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIHardwareFrames := true;
+    end;
     Result := PresentVAAPIFrame(Frame);
     Exit;
   end;
@@ -1237,6 +1246,7 @@ begin
   begin
     Log.LogInfo('VAAPI frame transfer failed: ' +
         FFmpegCore.GetErrorString(ErrorNumber), 'TVideoPlayback_ffmpeg.GetFrame');
+    av_frame_unref(fVAAPITransferFrame);
     Exit;
   end;
 
