@@ -1118,6 +1118,6 @@ begin
 end;
 
 initialization
-  MediaManager.Add(TVideoPlayback_MPV.Create);
+  MediaManager.Insert(0, TVideoPlayback_MPV.Create);
 
 end.
