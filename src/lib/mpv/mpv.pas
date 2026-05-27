@@ -120,14 +120,17 @@ var
 function LoadMpv(): boolean;
 procedure UnloadMpv();
 function MpvLoaded(): boolean;
+function MpvLoadError(): string;
 
 implementation
 
 uses
-  DynLibs;
+  DynLibs,
+  SysUtils;
 
 var
   MpvLibHandle: TLibHandle = 0;
+  LastMpvLoadError: string = '';
 
 function LoadSymbol(const Name: PAnsiChar): Pointer;
 begin
@@ -137,7 +140,7 @@ end;
 function LoadMpvLibrary(): TLibHandle;
 const
 {$IFDEF MSWINDOWS}
-  LibraryNames: array[0..1] of string = ('mpv-2.dll', 'libmpv.dll');
+  LibraryNames: array[0..2] of string = ('libmpv-2.dll', 'mpv-2.dll', 'libmpv.dll');
 {$ELSE}
 {$IFDEF DARWIN}
   LibraryNames: array[0..1] of string = ('libmpv.2.dylib', 'libmpv.dylib');
@@ -149,11 +152,19 @@ var
   LibraryName: string;
 begin
   Result := 0;
+  LastMpvLoadError := '';
   for LibraryName in LibraryNames do
   begin
     Result := DynLibs.LoadLibrary(LibraryName);
     if Result <> 0 then
+    begin
+      LastMpvLoadError := '';
       Exit;
+    end;
+
+    if LastMpvLoadError <> '' then
+      LastMpvLoadError := LastMpvLoadError + '; ';
+    LastMpvLoadError := LastMpvLoadError + LibraryName + ': ' + SysErrorMessage(GetLastOSError);
   end;
 end;
 
@@ -210,7 +221,10 @@ begin
     Assigned(mpv_render_context_report_swap);
 
   if not Result then
+  begin
+    LastMpvLoadError := 'loaded libmpv, but one or more required libmpv symbols are missing';
     UnloadMpv();
+  end;
 end;
 
 procedure UnloadMpv();
@@ -225,6 +239,13 @@ end;
 function MpvLoaded(): boolean;
 begin
   Result := MpvLibHandle <> 0;
+end;
+
+function MpvLoadError(): string;
+begin
+  Result := LastMpvLoadError;
+  if Result = '' then
+    Result := 'unknown error';
 end;
 
 end.

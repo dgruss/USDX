@@ -183,7 +183,7 @@ function TVideoPlayback_MPV.Init(): boolean;
 begin
   fInitialized := LoadMpv();
   if not fInitialized then
-    Log.LogWarn('libmpv not found; MPV video backend disabled', 'TVideoPlayback_MPV.Init')
+    Log.LogWarn('libmpv not loaded; MPV video backend disabled: ' + MpvLoadError(), 'TVideoPlayback_MPV.Init')
   else
     Log.LogInfo('Using libmpv client API ' + IntToStr(mpv_client_api_version()), 'TVideoPlayback_MPV.Init');
   Result := fInitialized;
