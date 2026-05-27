@@ -49,6 +49,9 @@ uses
   SysUtils,
   Math,
   ctypes,
+  {$IFDEF Linux}
+  DynLibs,
+  {$ENDIF}
   sdl2,
   avcodec,
   avformat,
@@ -109,6 +112,26 @@ const
   BUFFER_ALIGN = 32;
   ReflectionH = 0.5; //reflection height (50%)
 
+{$IFDEF FFMPEG_VAAPI}
+  DRM_FORMAT_R8 = 538982482;
+  DRM_FORMAT_RG88 = 943212370;
+  DRM_FORMAT_GR88 = 943215175;
+  DRM_FORMAT_NV12 = 842094158;
+  DRM_FORMAT_MOD_INVALID = $00FFFFFFFFFFFFFF;
+
+  EGL_NONE = $3038;
+  EGL_EXTENSIONS = $3055;
+  EGL_WIDTH = $3057;
+  EGL_HEIGHT = $3056;
+  EGL_LINUX_DMA_BUF_EXT = $3270;
+  EGL_LINUX_DRM_FOURCC_EXT = $3271;
+  EGL_DMA_BUF_PLANE0_FD_EXT = $3272;
+  EGL_DMA_BUF_PLANE0_OFFSET_EXT = $3273;
+  EGL_DMA_BUF_PLANE0_PITCH_EXT = $3274;
+  EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT = $3443;
+  EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT = $3444;
+{$ENDIF}
+
 type
   IVideo_FFmpeg = interface (IVideo)
   ['{E640E130-C8C0-4399-AF02-67A3569313AB}']
@@ -133,9 +156,15 @@ type
     fAVFrameRGB:  PAVFrame;
     {$IFDEF FFMPEG_VAAPI}
     fVAAPITransferFrame: PAVFrame;
+    fVAAPIDRMFrame: PAVFrame;
     fVAAPIDeviceContext: PAVBufferRef;
     fVAAPIEnabled: boolean;
     fVAAPIHardwareFrames: boolean;
+    fVAAPIZeroCopyFrameValid: boolean;
+    fVAAPIZeroCopyUnavailableLogged: boolean;
+    fVAAPIUVSwapped: boolean;
+    fVAAPIZeroCopyImages: array[0..1] of pointer;
+    fVAAPIZeroCopyTextures: array[0..1] of GLuint;
     {$ENDIF}
 
     fFrameTex:    GLuint; //**< OpenGL texture for FrameBuffer
@@ -176,7 +205,12 @@ type
     function CodecSupportsVAAPI(Codec: PAVCodec): boolean;
     function ConfigureVAAPI(Codec: PAVCodec): boolean;
     procedure ReleaseVAAPI();
+    procedure ReleaseVAAPIZeroCopyFrame();
     function PresentVAAPIFrame(Frame: PAVFrame): boolean;
+    function PresentVAAPIZeroCopyFrame(Frame: PAVFrame): boolean;
+    function ImportVAAPIDRMPlane(Descriptor: PAVDRMFrameDescriptor;
+        Layer: PAVDRMLayerDescriptor; PlaneIndex: integer; Width, Height: cint;
+        FourCC: cuint32; TextureIndex: integer): boolean;
     function ReopenSoftwareDecoderAt(Time: Extended): boolean;
     {$ENDIF}
     function DecodeFrame(): boolean;
@@ -189,6 +223,10 @@ type
     procedure SynchronizeTime(Frame: PAVFrame; pts: double);
 
     procedure GetVideoRect(var ScreenRect, TexRect: TRectCoords);
+    {$IFDEF FFMPEG_VAAPI}
+    procedure DrawVAAPIZeroCopyQuad(ScreenRect, TexRect: TRectCoords;
+        AlphaUpperLeft, AlphaLowerLeft, AlphaLowerRight, AlphaUpperRight: double);
+    {$ENDIF}
     procedure DrawBorders(ScreenRect: TRectCoords);
     procedure DrawBordersReflected(ScreenRect: TRectCoords; AlphaUpper, AlphaLower: double);
 
@@ -259,11 +297,46 @@ type
     function Open(const FileName : IPath): IVideo;
   end;
 
+{$IFDEF FFMPEG_VAAPI}
+type
+  EGLint = cint;
+  PEGLint = ^EGLint;
+  EGLDisplay = pointer;
+  EGLContext = pointer;
+  EGLClientBuffer = pointer;
+  EGLImageKHR = pointer;
+
+  TEGLGetCurrentDisplay = function(): EGLDisplay; cdecl;
+  TEGLQueryString = function(Display: EGLDisplay; Name: EGLint): PAnsiChar; cdecl;
+  TEGLGetProcAddress = function(ProcName: PAnsiChar): pointer; cdecl;
+  TEGLCreateImageKHR = function(Display: EGLDisplay; Context: EGLContext;
+      Target: EGLint; Buffer: EGLClientBuffer; AttribList: PEGLint): EGLImageKHR; cdecl;
+  TEGLDestroyImageKHR = function(Display: EGLDisplay; Image: EGLImageKHR): EGLint; cdecl;
+  TglEGLImageTargetTexture2DOES = procedure(Target: GLenum; Image: EGLImageKHR); cdecl;
+{$ENDIF}
+
 var
   FFmpegCore: TMediaCore_FFmpeg;
   SupportsNPOT: Boolean;
   PreferredCodecs: array of PAVCodec;
   PreferredCodecsParsed: boolean = false;
+  {$IFDEF FFMPEG_VAAPI}
+  VAAPIEGLLib: TLibHandle = NilHandle;
+  VAAPIEGLInitialized: boolean = false;
+  VAAPIEGLAvailable: boolean = false;
+  VAAPIEGLHasModifiers: boolean = false;
+  VAAPIEGLDisplay: EGLDisplay = nil;
+  VAAPIEGLGetCurrentDisplay: TEGLGetCurrentDisplay = nil;
+  VAAPIEGLQueryString: TEGLQueryString = nil;
+  VAAPIEGLGetProcAddress: TEGLGetProcAddress = nil;
+  VAAPIEGLCreateImageKHR: TEGLCreateImageKHR = nil;
+  VAAPIEGLDestroyImageKHR: TEGLDestroyImageKHR = nil;
+  VAAPIGLEGLImageTargetTexture2DOES: TglEGLImageTargetTexture2DOES = nil;
+  VAAPIShaderProgram: GLHandle = 0;
+  VAAPIShaderUniformY: GLint = -1;
+  VAAPIShaderUniformUV: GLint = -1;
+  VAAPIShaderUniformUVSwap: GLint = -1;
+  {$ENDIF}
 
 function IsSupportedScalingInput(Fmt: TAVPixelFormat): boolean;
 begin
@@ -271,6 +344,253 @@ begin
   if sws_isSupportedInput(Fmt) > 0 then
     Result := true;
 end;
+
+{$IFDEF FFMPEG_VAAPI}
+function Low32(Value: cuint64): EGLint;
+begin
+  Result := EGLint(Value and $FFFFFFFF);
+end;
+
+function High32(Value: cuint64): EGLint;
+begin
+  Result := EGLint((Value shr 32) and $FFFFFFFF);
+end;
+
+procedure EGLAddAttrib(var Attribs: array of EGLint; var Index: integer; Name, Value: EGLint);
+begin
+  if Index + 1 >= Length(Attribs) then
+    Exit;
+
+  Attribs[Index] := Name;
+  Attribs[Index + 1] := Value;
+  Inc(Index, 2);
+end;
+
+function ResolveEGLProc(const Name: AnsiString): pointer;
+begin
+  Result := nil;
+
+  if VAAPIEGLLib <> NilHandle then
+    Result := GetProcedureAddress(VAAPIEGLLib, PChar(Name));
+
+  if (Result = nil) and Assigned(VAAPIEGLGetProcAddress) then
+    Result := VAAPIEGLGetProcAddress(PAnsiChar(Name));
+end;
+
+function EnsureVAAPIEGL(): boolean;
+var
+  ExtensionsPtr: PAnsiChar;
+  Extensions: AnsiString;
+begin
+  if VAAPIEGLInitialized then
+  begin
+    Result := VAAPIEGLAvailable;
+    Exit;
+  end;
+
+  VAAPIEGLInitialized := true;
+  VAAPIEGLLib := LoadLibrary('libEGL.so.1');
+  if VAAPIEGLLib = NilHandle then
+    VAAPIEGLLib := LoadLibrary('libEGL.so');
+
+  if VAAPIEGLLib = NilHandle then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: libEGL could not be loaded',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+    Exit;
+  end;
+
+  VAAPIEGLGetCurrentDisplay := TEGLGetCurrentDisplay(
+      GetProcedureAddress(VAAPIEGLLib, 'eglGetCurrentDisplay'));
+  VAAPIEGLQueryString := TEGLQueryString(
+      GetProcedureAddress(VAAPIEGLLib, 'eglQueryString'));
+  VAAPIEGLGetProcAddress := TEGLGetProcAddress(
+      GetProcedureAddress(VAAPIEGLLib, 'eglGetProcAddress'));
+
+  if (not Assigned(VAAPIEGLGetCurrentDisplay)) or
+     (not Assigned(VAAPIEGLQueryString)) or
+     (not Assigned(VAAPIEGLGetProcAddress)) then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: required EGL entry points are missing',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+    Exit;
+  end;
+
+  VAAPIEGLDisplay := VAAPIEGLGetCurrentDisplay();
+  if VAAPIEGLDisplay = nil then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: current OpenGL context is not EGL-backed',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+    Exit;
+  end;
+
+  ExtensionsPtr := VAAPIEGLQueryString(VAAPIEGLDisplay, EGL_EXTENSIONS);
+  if ExtensionsPtr <> nil then
+    Extensions := ExtensionsPtr
+  else
+    Extensions := '';
+
+  if not AnsiContainsStr(Extensions, 'EGL_EXT_image_dma_buf_import') then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: EGL_EXT_image_dma_buf_import is missing',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+    Exit;
+  end;
+
+  VAAPIEGLHasModifiers := AnsiContainsStr(Extensions,
+      'EGL_EXT_image_dma_buf_import_modifiers');
+
+  VAAPIEGLCreateImageKHR := TEGLCreateImageKHR(
+      ResolveEGLProc('eglCreateImageKHR'));
+  VAAPIEGLDestroyImageKHR := TEGLDestroyImageKHR(
+      ResolveEGLProc('eglDestroyImageKHR'));
+  VAAPIGLEGLImageTargetTexture2DOES := TglEGLImageTargetTexture2DOES(
+      ResolveEGLProc('glEGLImageTargetTexture2DOES'));
+
+  if (not Assigned(VAAPIEGLCreateImageKHR)) or
+     (not Assigned(VAAPIEGLDestroyImageKHR)) or
+     (not Assigned(VAAPIGLEGLImageTargetTexture2DOES)) then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: EGL image import entry points are missing',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Result := false;
+    Exit;
+  end;
+
+  VAAPIEGLAvailable := true;
+  Result := true;
+end;
+
+function CompileVAAPIShader(ShaderType: GLenum; const Source: AnsiString;
+    out Shader: GLHandle): boolean;
+var
+  SourcePtr: PGLchar;
+  Status: GLint;
+  InfoLog: array[0..1023] of AnsiChar;
+  InfoLen: GLsizei;
+begin
+  Result := false;
+  Shader := 0;
+
+  Shader := glCreateShader(ShaderType);
+  if Shader = 0 then
+    Exit;
+
+  SourcePtr := PAnsiChar(Source);
+  glShaderSource(Shader, 1, @SourcePtr, nil);
+  glCompileShader(Shader);
+  Status := 0;
+  glGetShaderiv(Shader, GL_COMPILE_STATUS, @Status);
+  if Status = 0 then
+  begin
+    FillChar(InfoLog, SizeOf(InfoLog), 0);
+    InfoLen := 0;
+    glGetShaderInfoLog(Shader, SizeOf(InfoLog) - 1, @InfoLen, @InfoLog[0]);
+    Log.LogInfo('VAAPI zero-copy shader compile failed: ' +
+        String(PAnsiChar(@InfoLog[0])), 'TVideoPlayback_ffmpeg.GetFrame');
+    glDeleteShader(Shader);
+    Shader := 0;
+    Exit;
+  end;
+
+  Result := true;
+end;
+
+function EnsureVAAPIShader(): boolean;
+const
+  VertexShaderSource: AnsiString =
+      '#version 120' + #10 +
+      'varying vec2 vTexCoord;' + #10 +
+      'varying vec4 vColor;' + #10 +
+      'void main() {' + #10 +
+      '  vTexCoord = gl_MultiTexCoord0.st;' + #10 +
+      '  vColor = gl_Color;' + #10 +
+      '  gl_Position = ftransform();' + #10 +
+      '}';
+  FragmentShaderSource: AnsiString =
+      '#version 120' + #10 +
+      'uniform sampler2D yTex;' + #10 +
+      'uniform sampler2D uvTex;' + #10 +
+      'uniform int uvSwap;' + #10 +
+      'varying vec2 vTexCoord;' + #10 +
+      'varying vec4 vColor;' + #10 +
+      'void main() {' + #10 +
+      '  float y = texture2D(yTex, vTexCoord).r;' + #10 +
+      '  vec2 uvSample = texture2D(uvTex, vTexCoord).rg;' + #10 +
+      '  if (uvSwap != 0) uvSample = uvSample.gr;' + #10 +
+      '  vec2 uv = uvSample - vec2(0.5, 0.5);' + #10 +
+      '  float r = y + 1.5748 * uv.y;' + #10 +
+      '  float g = y - 0.1873 * uv.x - 0.4681 * uv.y;' + #10 +
+      '  float b = y + 1.8556 * uv.x;' + #10 +
+      '  gl_FragColor = vec4(r, g, b, 1.0) * vColor;' + #10 +
+      '}';
+var
+  VertexShader: GLHandle;
+  FragmentShader: GLHandle;
+  Status: GLint;
+  InfoLog: array[0..1023] of AnsiChar;
+  InfoLen: GLsizei;
+begin
+  Result := false;
+
+  if VAAPIShaderProgram <> 0 then
+  begin
+    Result := true;
+    Exit;
+  end;
+
+  if (not Assigned(glCreateShader)) or (not Assigned(glCreateProgram)) or
+     (not Assigned(glShaderSource)) or (not Assigned(glCompileShader)) or
+     (not Assigned(glAttachShader)) or (not Assigned(glLinkProgram)) or
+     (not Assigned(glGetShaderiv)) or (not Assigned(glGetProgramiv)) or
+     (not Assigned(glUseProgram)) or (not Assigned(glUniform1i)) or
+     (not Assigned(glGetUniformLocation)) or (not Assigned(glActiveTexture)) then
+  begin
+    Log.LogInfo('VAAPI zero-copy unavailable: OpenGL shader entry points are missing',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Exit;
+  end;
+
+  if not CompileVAAPIShader(GL_VERTEX_SHADER, VertexShaderSource, VertexShader) then
+    Exit;
+
+  if not CompileVAAPIShader(GL_FRAGMENT_SHADER, FragmentShaderSource, FragmentShader) then
+  begin
+    glDeleteShader(VertexShader);
+    Exit;
+  end;
+
+  VAAPIShaderProgram := glCreateProgram();
+  glAttachShader(VAAPIShaderProgram, VertexShader);
+  glAttachShader(VAAPIShaderProgram, FragmentShader);
+  glLinkProgram(VAAPIShaderProgram);
+  Status := 0;
+  glGetProgramiv(VAAPIShaderProgram, GL_LINK_STATUS, @Status);
+  glDeleteShader(VertexShader);
+  glDeleteShader(FragmentShader);
+
+  if Status = 0 then
+  begin
+    FillChar(InfoLog, SizeOf(InfoLog), 0);
+    InfoLen := 0;
+    glGetProgramInfoLog(VAAPIShaderProgram, SizeOf(InfoLog) - 1, @InfoLen, @InfoLog[0]);
+    Log.LogInfo('VAAPI zero-copy shader link failed: ' +
+        String(PAnsiChar(@InfoLog[0])), 'TVideoPlayback_ffmpeg.GetFrame');
+    glDeleteProgram(VAAPIShaderProgram);
+    VAAPIShaderProgram := 0;
+    Exit;
+  end;
+
+  VAAPIShaderUniformY := glGetUniformLocation(VAAPIShaderProgram, 'yTex');
+  VAAPIShaderUniformUV := glGetUniformLocation(VAAPIShaderProgram, 'uvTex');
+  VAAPIShaderUniformUVSwap := glGetUniformLocation(VAAPIShaderProgram, 'uvSwap');
+  Result := true;
+end;
+{$ENDIF}
 
 function SelectSoftwareFormat(Formats: PAVPixelFormat): TAVPixelFormat;
 begin
@@ -637,10 +957,37 @@ end;
 
 procedure TVideo_FFmpeg.ReleaseVAAPI();
 begin
+  ReleaseVAAPIZeroCopyFrame();
   if fVAAPIDeviceContext <> nil then
     av_buffer_unref(@fVAAPIDeviceContext);
   fVAAPIEnabled := false;
   fVAAPIHardwareFrames := false;
+end;
+
+procedure TVideo_FFmpeg.ReleaseVAAPIZeroCopyFrame();
+var
+  I: integer;
+begin
+  for I := 0 to High(fVAAPIZeroCopyImages) do
+  begin
+    if (fVAAPIZeroCopyImages[I] <> nil) and Assigned(VAAPIEGLDestroyImageKHR) then
+    begin
+      VAAPIEGLDestroyImageKHR(VAAPIEGLDisplay, fVAAPIZeroCopyImages[I]);
+      fVAAPIZeroCopyImages[I] := nil;
+    end;
+
+    if fVAAPIZeroCopyTextures[I] <> 0 then
+    begin
+      glDeleteTextures(1, @fVAAPIZeroCopyTextures[I]);
+      fVAAPIZeroCopyTextures[I] := 0;
+    end;
+  end;
+
+  if fVAAPIDRMFrame <> nil then
+    av_frame_unref(fVAAPIDRMFrame);
+
+  fVAAPIZeroCopyFrameValid := false;
+  fVAAPIUVSwapped := false;
 end;
 
 function TVideo_FFmpeg.ReopenSoftwareDecoderAt(Time: Extended): boolean;
@@ -931,8 +1278,16 @@ begin
   {$IFDEF FFMPEG_VAAPI}
   fVAAPIDeviceContext := nil;
   fVAAPITransferFrame := nil;
+  fVAAPIDRMFrame := nil;
   fVAAPIEnabled := false;
   fVAAPIHardwareFrames := false;
+  fVAAPIZeroCopyFrameValid := false;
+  fVAAPIZeroCopyUnavailableLogged := false;
+  fVAAPIUVSwapped := false;
+  fVAAPIZeroCopyImages[0] := nil;
+  fVAAPIZeroCopyImages[1] := nil;
+  fVAAPIZeroCopyTextures[0] := 0;
+  fVAAPIZeroCopyTextures[1] := 0;
   {$ENDIF}
 
   fScreen := 1;
@@ -959,7 +1314,9 @@ begin
   av_freep(@fAVFrameRGB);
   av_frame_free(@fAVFrame);
   {$IFDEF FFMPEG_VAAPI}
+  ReleaseVAAPIZeroCopyFrame();
   av_frame_free(@fVAAPITransferFrame);
+  av_frame_free(@fVAAPIDRMFrame);
   {$ENDIF}
 
   ReleaseCodecContext();
@@ -1211,12 +1568,6 @@ begin
   {$IFDEF FFMPEG_VAAPI}
   if fVAAPIEnabled and (Frame^.format = Ord(AV_PIX_FMT_VAAPI)) then
   begin
-    if not fVAAPIHardwareFrames then
-    begin
-      Log.LogInfo('Using VAAPI hardware frames via CPU transfer',
-          'TVideoPlayback_ffmpeg.GetFrame');
-      fVAAPIHardwareFrames := true;
-    end;
     Result := PresentVAAPIFrame(Frame);
     Exit;
   end;
@@ -1226,11 +1577,225 @@ begin
 end;
 
 {$IFDEF FFMPEG_VAAPI}
+function TVideo_FFmpeg.ImportVAAPIDRMPlane(Descriptor: PAVDRMFrameDescriptor;
+    Layer: PAVDRMLayerDescriptor; PlaneIndex: integer; Width, Height: cint;
+    FourCC: cuint32; TextureIndex: integer): boolean;
+var
+  ObjectIndex: cint;
+  Plane: PAVDRMPlaneDescriptor;
+  DRMObject: PAVDRMObjectDescriptor;
+  Attribs: array[0..19] of EGLint;
+  AttribIndex: integer;
+  Image: EGLImageKHR;
+  Texture: GLuint;
+  Modifier: cuint64;
+  GlErr: GLenum;
+begin
+  Result := false;
+
+  ObjectIndex := Layer^.planes[PlaneIndex].object_index;
+  if (ObjectIndex < 0) or (ObjectIndex >= Descriptor^.nb_objects) then
+    Exit;
+
+  Plane := @Layer^.planes[PlaneIndex];
+  DRMObject := @Descriptor^.objects[ObjectIndex];
+
+  AttribIndex := 0;
+  EGLAddAttrib(Attribs, AttribIndex, EGL_WIDTH, Width);
+  EGLAddAttrib(Attribs, AttribIndex, EGL_HEIGHT, Height);
+  EGLAddAttrib(Attribs, AttribIndex, EGL_LINUX_DRM_FOURCC_EXT, EGLint(FourCC));
+  EGLAddAttrib(Attribs, AttribIndex, EGL_DMA_BUF_PLANE0_FD_EXT, DRMObject^.fd);
+  EGLAddAttrib(Attribs, AttribIndex, EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(Plane^.offset));
+  EGLAddAttrib(Attribs, AttribIndex, EGL_DMA_BUF_PLANE0_PITCH_EXT, EGLint(Plane^.pitch));
+
+  Modifier := DRMObject^.format_modifier;
+  if VAAPIEGLHasModifiers and (Modifier <> DRM_FORMAT_MOD_INVALID) then
+  begin
+    EGLAddAttrib(Attribs, AttribIndex, EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, Low32(Modifier));
+    EGLAddAttrib(Attribs, AttribIndex, EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT, High32(Modifier));
+  end;
+
+  EGLAddAttrib(Attribs, AttribIndex, EGL_NONE, 0);
+
+  Image := VAAPIEGLCreateImageKHR(VAAPIEGLDisplay, nil, EGL_LINUX_DMA_BUF_EXT,
+      nil, @Attribs[0]);
+  if Image = nil then
+    Exit;
+
+  Texture := 0;
+  glGetError();
+  glGenTextures(1, @Texture);
+  glBindTexture(GL_TEXTURE_2D, Texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  VAAPIGLEGLImageTargetTexture2DOES(GL_TEXTURE_2D, Image);
+  GlErr := glGetError();
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  if GlErr <> GL_NO_ERROR then
+  begin
+    glDeleteTextures(1, @Texture);
+    VAAPIEGLDestroyImageKHR(VAAPIEGLDisplay, Image);
+    Exit;
+  end;
+
+  fVAAPIZeroCopyImages[TextureIndex] := Image;
+  fVAAPIZeroCopyTextures[TextureIndex] := Texture;
+  Result := true;
+end;
+
+function TVideo_FFmpeg.PresentVAAPIZeroCopyFrame(Frame: PAVFrame): boolean;
+var
+  ErrorNumber: Integer;
+  Descriptor: PAVDRMFrameDescriptor;
+  LumaLayer: PAVDRMLayerDescriptor;
+  ChromaLayer: PAVDRMLayerDescriptor;
+  LumaPlaneIndex: integer;
+  ChromaPlaneIndex: integer;
+  ChromaFourCC: cuint32;
+begin
+  Result := false;
+
+  if (not EnsureVAAPIEGL()) or (not EnsureVAAPIShader()) then
+    Exit;
+
+  if fVAAPIDRMFrame = nil then
+    fVAAPIDRMFrame := av_frame_alloc();
+  if fVAAPIDRMFrame = nil then
+  begin
+    Log.LogError('Failed to allocate VAAPI DRM PRIME frame',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    Exit;
+  end;
+
+  ReleaseVAAPIZeroCopyFrame();
+  fVAAPIDRMFrame^.format := Ord(AV_PIX_FMT_DRM_PRIME);
+  ErrorNumber := av_hwframe_map(fVAAPIDRMFrame, Frame,
+      AV_HWFRAME_MAP_READ or AV_HWFRAME_MAP_DIRECT);
+  if ErrorNumber < 0 then
+  begin
+    if not fVAAPIZeroCopyUnavailableLogged then
+    begin
+      Log.LogInfo('VAAPI zero-copy map failed: ' +
+          FFmpegCore.GetErrorString(ErrorNumber),
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIZeroCopyUnavailableLogged := true;
+    end;
+    av_frame_unref(fVAAPIDRMFrame);
+    Exit;
+  end;
+
+  Descriptor := PAVDRMFrameDescriptor(fVAAPIDRMFrame^.data[0]);
+  if (Descriptor = nil) or (Descriptor^.nb_layers <= 0) then
+  begin
+    if not fVAAPIZeroCopyUnavailableLogged then
+    begin
+      Log.LogInfo('VAAPI zero-copy map did not return a DRM PRIME descriptor',
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIZeroCopyUnavailableLogged := true;
+    end;
+    av_frame_unref(fVAAPIDRMFrame);
+    Exit;
+  end;
+
+  LumaLayer := nil;
+  ChromaLayer := nil;
+  LumaPlaneIndex := 0;
+  ChromaPlaneIndex := 0;
+  ChromaFourCC := DRM_FORMAT_RG88;
+
+  if (Descriptor^.layers[0].format = DRM_FORMAT_NV12) and
+     (Descriptor^.layers[0].nb_planes >= 2) then
+  begin
+    LumaLayer := @Descriptor^.layers[0];
+    ChromaLayer := @Descriptor^.layers[0];
+    ChromaPlaneIndex := 1;
+    fVAAPIUVSwapped := false;
+  end
+  else if (Descriptor^.nb_layers >= 2) and
+          (Descriptor^.layers[0].format = DRM_FORMAT_R8) and
+          (Descriptor^.layers[0].nb_planes >= 1) and
+          ((Descriptor^.layers[1].format = DRM_FORMAT_RG88) or
+           (Descriptor^.layers[1].format = DRM_FORMAT_GR88)) and
+          (Descriptor^.layers[1].nb_planes >= 1) then
+  begin
+    LumaLayer := @Descriptor^.layers[0];
+    ChromaLayer := @Descriptor^.layers[1];
+    ChromaFourCC := Descriptor^.layers[1].format;
+    fVAAPIUVSwapped := Descriptor^.layers[1].format = DRM_FORMAT_GR88;
+  end;
+
+  if (LumaLayer = nil) or (ChromaLayer = nil) then
+  begin
+    if not fVAAPIZeroCopyUnavailableLogged then
+    begin
+      Log.LogInfo('VAAPI zero-copy only supports NV12 DRM frames; got ' +
+          IntToStr(Descriptor^.nb_layers) + ' layer(s), first fourcc ' +
+          IntToStr(Descriptor^.layers[0].format), 'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIZeroCopyUnavailableLogged := true;
+    end;
+    av_frame_unref(fVAAPIDRMFrame);
+    Exit;
+  end;
+
+  if not ImportVAAPIDRMPlane(Descriptor, LumaLayer, LumaPlaneIndex, fCodecContext^.width,
+      fCodecContext^.height, DRM_FORMAT_R8, 0) then
+  begin
+    if not fVAAPIZeroCopyUnavailableLogged then
+    begin
+      Log.LogInfo('VAAPI zero-copy failed to import the NV12 luma plane',
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIZeroCopyUnavailableLogged := true;
+    end;
+    ReleaseVAAPIZeroCopyFrame();
+    Exit;
+  end;
+
+  if not ImportVAAPIDRMPlane(Descriptor, ChromaLayer, ChromaPlaneIndex,
+      (fCodecContext^.width + 1) div 2, (fCodecContext^.height + 1) div 2,
+      ChromaFourCC, 1) then
+  begin
+    if not fVAAPIZeroCopyUnavailableLogged then
+    begin
+      Log.LogInfo('VAAPI zero-copy failed to import the NV12 chroma plane',
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIZeroCopyUnavailableLogged := true;
+    end;
+    ReleaseVAAPIZeroCopyFrame();
+    Exit;
+  end;
+
+  fVAAPIZeroCopyFrameValid := true;
+  fFrameTexValid := true;
+  Result := true;
+end;
+
 function TVideo_FFmpeg.PresentVAAPIFrame(Frame: PAVFrame): boolean;
 var
   ErrorNumber: Integer;
 begin
   Result := false;
+
+  if PresentVAAPIZeroCopyFrame(Frame) then
+  begin
+    if not fVAAPIHardwareFrames then
+    begin
+      Log.LogInfo('Using VAAPI hardware frames via dmabuf/EGL zero-copy',
+          'TVideoPlayback_ffmpeg.GetFrame');
+      fVAAPIHardwareFrames := true;
+    end;
+    Result := true;
+    Exit;
+  end;
+
+  if not fVAAPIHardwareFrames then
+  begin
+    Log.LogInfo('Using VAAPI hardware frames via CPU transfer',
+        'TVideoPlayback_ffmpeg.GetFrame');
+    fVAAPIHardwareFrames := true;
+  end;
 
   if fVAAPITransferFrame = nil then
     fVAAPITransferFrame := av_frame_alloc();
@@ -1286,6 +1851,10 @@ var
   SourceFormat: TAVPixelFormat;
 begin
   Result := false;
+
+  {$IFDEF FFMPEG_VAAPI}
+  ReleaseVAAPIZeroCopyFrame();
+  {$ENDIF}
 
   SourceFormat := fCodecContext^.pix_fmt;
   {$IFDEF FFMPEG_VAAPI}
@@ -1499,6 +2068,52 @@ begin
   TexRect.Lower := (fScaledHeight / fTexHeight) * fFrameRange.Lower;
 end;
 
+{$IFDEF FFMPEG_VAAPI}
+procedure TVideo_FFmpeg.DrawVAAPIZeroCopyQuad(ScreenRect, TexRect: TRectCoords;
+    AlphaUpperLeft, AlphaLowerLeft, AlphaLowerRight, AlphaUpperRight: double);
+begin
+  glUseProgram(VAAPIShaderProgram);
+  glUniform1i(VAAPIShaderUniformY, 0);
+  glUniform1i(VAAPIShaderUniformUV, 1);
+  glUniform1i(VAAPIShaderUniformUVSwap, Ord(fVAAPIUVSwapped));
+
+  glActiveTexture(GL_TEXTURE0);
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, fVAAPIZeroCopyTextures[0]);
+
+  glActiveTexture(GL_TEXTURE1);
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, fVAAPIZeroCopyTextures[1]);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBegin(GL_QUADS);
+    glColor4f(1, 1, 1, AlphaUpperLeft);
+    glTexCoord2f(TexRect.Left, TexRect.Upper);
+    glVertex3f(ScreenRect.Left, ScreenRect.Upper, fPosZ);
+
+    glColor4f(1, 1, 1, AlphaLowerLeft);
+    glTexCoord2f(TexRect.Left, TexRect.Lower);
+    glVertex3f(ScreenRect.Left, ScreenRect.Lower, fPosZ);
+
+    glColor4f(1, 1, 1, AlphaLowerRight);
+    glTexCoord2f(TexRect.Right, TexRect.Lower);
+    glVertex3f(ScreenRect.Right, ScreenRect.Lower, fPosZ);
+
+    glColor4f(1, 1, 1, AlphaUpperRight);
+    glTexCoord2f(TexRect.Right, TexRect.Upper);
+    glVertex3f(ScreenRect.Right, ScreenRect.Upper, fPosZ);
+  glEnd;
+
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+  glUseProgram(0);
+end;
+{$ENDIF}
+
 procedure TVideo_FFmpeg.DrawBorders(ScreenRect: TRectCoords);
   procedure DrawRect(left, right, upper, lower: double);
   begin
@@ -1608,26 +2223,35 @@ begin
   glDepthFunc(GL_LEQUAL);
   glEnable(GL_DEPTH_TEST);
 
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, fFrameTex);
-  glColor4f(1, 1, 1, fAlpha);
-  glBegin(GL_QUADS);
-    // upper-left coord
-    glTexCoord2f(TexRect.Left, TexRect.Upper);
-    glVertex3f(ScreenRect.Left, ScreenRect.Upper, fPosZ);
-    // lower-left coord
-    glTexCoord2f(TexRect.Left, TexRect.Lower);
-    glVertex3f(ScreenRect.Left, ScreenRect.Lower, fPosZ);
-    // lower-right coord
-    glTexCoord2f(TexRect.Right, TexRect.Lower);
-    glVertex3f(ScreenRect.Right, ScreenRect.Lower, fPosZ);
-    // upper-right coord
-    glTexCoord2f(TexRect.Right, TexRect.Upper);
-    glVertex3f(ScreenRect.Right, ScreenRect.Upper, fPosZ);
-  glEnd;
+  {$IFDEF FFMPEG_VAAPI}
+  if fVAAPIZeroCopyFrameValid then
+    DrawVAAPIZeroCopyQuad(ScreenRect, TexRect, fAlpha, fAlpha, fAlpha, fAlpha)
+  else
+  begin
+  {$ENDIF}
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, fFrameTex);
+    glColor4f(1, 1, 1, fAlpha);
+    glBegin(GL_QUADS);
+      // upper-left coord
+      glTexCoord2f(TexRect.Left, TexRect.Upper);
+      glVertex3f(ScreenRect.Left, ScreenRect.Upper, fPosZ);
+      // lower-left coord
+      glTexCoord2f(TexRect.Left, TexRect.Lower);
+      glVertex3f(ScreenRect.Left, ScreenRect.Lower, fPosZ);
+      // lower-right coord
+      glTexCoord2f(TexRect.Right, TexRect.Lower);
+      glVertex3f(ScreenRect.Right, ScreenRect.Lower, fPosZ);
+      // upper-right coord
+      glTexCoord2f(TexRect.Right, TexRect.Upper);
+      glVertex3f(ScreenRect.Right, ScreenRect.Upper, fPosZ);
+    glEnd;
 
-  glDisable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  {$IFDEF FFMPEG_VAAPI}
+  end;
+  {$ENDIF}
 
   //draw black borders
   DrawBorders(ScreenRect);
@@ -1658,6 +2282,7 @@ var
 
   AlphaUpper:   double;
   AlphaLower:   double;
+  ReflectionTexLower: double;
 
 begin
   // exit if there's nothing to draw
@@ -1684,8 +2309,6 @@ begin
   glEnable(GL_DEPTH_TEST);
 
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, fFrameTex);
 
   //calculate new ScreenRect coordinates for Reflection
   ScreenRect.Lower := fPosY + fHeight + fReflectionSpacing
@@ -1701,30 +2324,48 @@ begin
   AlphaBottom := AlphaLower+(AlphaUpper-AlphaLower)*
     (fPosY+fHeight+fReflectionSpacing+fHeight*ReflectionH-ScreenRect.Lower)/fHeight;
 
-  glBegin(GL_QUADS);
-    //Top Left
-    glColor4f(1, 1, 1, AlphaTop);
-    glTexCoord2f(TexRect.Left, TexRect.Lower);
-    glVertex3f(ScreenRect.Left, ScreenRect.Upper, fPosZ);
+  {$IFDEF FFMPEG_VAAPI}
+  if fVAAPIZeroCopyFrameValid then
+  begin
+    ReflectionTexLower := (TexRect.Lower-TexRect.Upper)*(1-ReflectionH);
+    TexRect.Upper := TexRect.Lower;
+    TexRect.Lower := ReflectionTexLower;
+    DrawVAAPIZeroCopyQuad(ScreenRect, TexRect, AlphaTop, AlphaBottom,
+        AlphaBottom, AlphaTop);
+  end
+  else
+  begin
+  {$ENDIF}
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, fFrameTex);
 
-    //Bottom Left
-    glColor4f(1, 1, 1, AlphaBottom);
-    glTexCoord2f(TexRect.Left, (TexRect.Lower-TexRect.Upper)*(1-ReflectionH));
-    glVertex3f(ScreenRect.Left, ScreenRect.Lower, fPosZ);
+    glBegin(GL_QUADS);
+      //Top Left
+      glColor4f(1, 1, 1, AlphaTop);
+      glTexCoord2f(TexRect.Left, TexRect.Lower);
+      glVertex3f(ScreenRect.Left, ScreenRect.Upper, fPosZ);
 
-    //Bottom Right
-    glColor4f(1, 1, 1, AlphaBottom);
-    glTexCoord2f(TexRect.Right, (TexRect.Lower-TexRect.Upper)*(1-ReflectionH));
-    glVertex3f(ScreenRect.Right, ScreenRect.Lower, fPosZ);
+      //Bottom Left
+      glColor4f(1, 1, 1, AlphaBottom);
+      glTexCoord2f(TexRect.Left, (TexRect.Lower-TexRect.Upper)*(1-ReflectionH));
+      glVertex3f(ScreenRect.Left, ScreenRect.Lower, fPosZ);
 
-    //Top Right
-    glColor4f(1, 1, 1, AlphaTop);
-    glTexCoord2f(TexRect.Right, TexRect.Lower);
-    glVertex3f(ScreenRect.Right, ScreenRect.Upper, fPosZ);
-  glEnd;
+      //Bottom Right
+      glColor4f(1, 1, 1, AlphaBottom);
+      glTexCoord2f(TexRect.Right, (TexRect.Lower-TexRect.Upper)*(1-ReflectionH));
+      glVertex3f(ScreenRect.Right, ScreenRect.Lower, fPosZ);
 
-  glDisable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, 0);
+      //Top Right
+      glColor4f(1, 1, 1, AlphaTop);
+      glTexCoord2f(TexRect.Right, TexRect.Lower);
+      glVertex3f(ScreenRect.Right, ScreenRect.Upper, fPosZ);
+    glEnd;
+
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  {$IFDEF FFMPEG_VAAPI}
+  end;
+  {$ENDIF}
 
   //draw black borders
   DrawBordersReflected(ScreenRect, AlphaUpper, AlphaLower);

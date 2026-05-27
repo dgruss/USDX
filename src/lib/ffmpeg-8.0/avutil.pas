@@ -89,11 +89,13 @@ type
   );
   PAVPixelFormat = ^TAVPixelFormat;
   TAVPixelFormat = (
+    AV_PIX_FMT_NONE = -1,
     AV_PIX_FMT_RGB24 = 2,
     AV_PIX_FMT_BGR24,
     AV_PIX_FMT_RGBA = 26,
     AV_PIX_FMT_BGRA = 28,
-    AV_PIX_FMT_VAAPI = 44
+    AV_PIX_FMT_VAAPI = 44,
+    AV_PIX_FMT_DRM_PRIME = 178
   );
   TAVHWDeviceType = (
     AV_HWDEVICE_TYPE_NONE,
@@ -152,6 +154,38 @@ type
     key: PAnsiChar;
     value: PAnsiChar;
   end;
+
+const
+  AV_HWFRAME_MAP_READ = 1;
+  AV_HWFRAME_MAP_DIRECT = 8;
+  AV_DRM_MAX_PLANES = 4;
+
+type
+  PAVDRMObjectDescriptor = ^TAVDRMObjectDescriptor;
+  TAVDRMObjectDescriptor = record
+    fd: cint;
+    size: csize_t;
+    format_modifier: cuint64;
+  end;
+  PAVDRMPlaneDescriptor = ^TAVDRMPlaneDescriptor;
+  TAVDRMPlaneDescriptor = record
+    object_index: cint;
+    offset: PtrInt;
+    pitch: PtrInt;
+  end;
+  PAVDRMLayerDescriptor = ^TAVDRMLayerDescriptor;
+  TAVDRMLayerDescriptor = record
+    format: cuint32;
+    nb_planes: cint;
+    planes: array [0..AV_DRM_MAX_PLANES-1] of TAVDRMPlaneDescriptor;
+  end;
+  PAVDRMFrameDescriptor = ^TAVDRMFrameDescriptor;
+  TAVDRMFrameDescriptor = record
+    nb_objects: cint;
+    objects: array [0..AV_DRM_MAX_PLANES-1] of TAVDRMObjectDescriptor;
+    nb_layers: cint;
+    layers: array [0..AV_DRM_MAX_PLANES-1] of TAVDRMLayerDescriptor;
+  end;
 procedure av_channel_layout_default(ch_layout: PAVChannelLayout; nb_channels: cint); cdecl; external av__util;
 function av_channel_layout_from_string(channel_layout: PAVChannelLayout; str: PAnsiChar): cint; cdecl; external av__util;
 procedure av_free(ptr: pointer); cdecl; external av__util;
@@ -167,6 +201,7 @@ function av_buffer_ref(buf: PAVBufferRef): PAVBufferRef; cdecl; external av__uti
 procedure av_buffer_unref(buf: PPAVBufferRef); cdecl; external av__util;
 function av_hwdevice_ctx_create(device_ctx: PPAVBufferRef; type_: TAVHWDeviceType; device: PAnsiChar; opts: PAVDictionary; flags: cint): cint; cdecl; external av__util;
 function av_hwdevice_get_type_name(type_: TAVHWDeviceType): PAnsiChar; cdecl; external av__util;
+function av_hwframe_map(dst: PAVFrame; src: PAVFrame; flags: cint): cint; cdecl; external av__util;
 function av_hwframe_transfer_data(dst: PAVFrame; src: PAVFrame; flags: cint): cint; cdecl; external av__util;
 function av_opt_set_int(obj: pointer; name: PAnsiChar; val: cint64; search_flags: cint): cint; cdecl; external av__util;
 function av_opt_set_chlayout(obj: pointer; name: PAnsiChar; layout: PAVChannelLayout; search_flags: cint): cint; cdecl; external av__util;
