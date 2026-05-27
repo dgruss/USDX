@@ -52,6 +52,8 @@
 {$IFEND}
 
 
+{$@DEFINE_HAVE_MPV@ HaveMpv}
+
 {$@DEFINE_HAVE_PROJECTM@ HaveProjectM}
 {$@DEFINE_USE_LOCAL_PROJECTM_PRESETS@ UseLocalProjectMPresets}
 {$IF Defined(HaveProjectM) and Defined(IncludeConstants)}

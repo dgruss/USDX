@@ -56,6 +56,8 @@
   LIBSWSCALE_VERSION_RELEASE = 100;
 {$IFEND}
 
+{$DEFINE HaveMpv}
+
 {$DEFINE HaveProjectM}
 {$IF Defined(HaveProjectM) and Defined(IncludeConstants)}
   ProjectM_DataDir = 'visuals\projectM';

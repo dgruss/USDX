@@ -101,6 +101,10 @@ uses
     UMediaCore_FFmpeg   in 'media\UMediaCore_FFmpeg.pas',
   {$ENDIF}  // UseFFmpeg
 
+  {$IFDEF UseMpvVideo}
+    mpv                 in 'lib\mpv\mpv.pas',
+  {$ENDIF}
+
   {$IFDEF UseProjectM}
   projectM      in 'lib\projectM\projectM.pas',
   {$ENDIF}
@@ -263,6 +267,9 @@ uses
   // This means the first entry has highest priority, the last lowest.
   //******************************
 
+{$IFDEF UseMpvVideo}
+  UVideo_MPV                in 'media\UVideo_MPV.pas',
+{$ENDIF}
 {$IFDEF UseFFmpegVideo}
   UVideo                    in 'media\UVideo.pas',
 {$ENDIF}

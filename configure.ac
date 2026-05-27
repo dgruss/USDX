@@ -307,6 +307,9 @@ else
 fi
 AC_SUBST_DEFINE(HAVE_FFMPEG, $ffmpeg_HAVE)
 
+PKG_HAVE([mpv], [mpv], check)
+AC_SUBST_DEFINE(HAVE_MPV, $mpv_HAVE)
+
 # map avutil library version to ffmpeg version
 AC_MSG_CHECKING([version of ffmpeg])
 # the order is ([avutil], [avcodec], [avformat], [swscale], [swresample])
@@ -586,4 +589,3 @@ if test x$FPC_PLATFORM = xdarwin; then
 !!! Packaging with $MACOS_PACKAGING and libdir $MACOS_PACKAGING_LIBDIR.
                    ])
 fi
-

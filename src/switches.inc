@@ -100,6 +100,11 @@
   {$DEFINE UseFFmpegVideo}
 {$ENDIF}
 
+// libmpv config
+{$IFDEF HaveMpv}
+  {$DEFINE UseMpvVideo}
+{$ENDIF}
+
 // projectM config
 {$IF Defined(HaveProjectM)}
   {$DEFINE UseProjectM}
