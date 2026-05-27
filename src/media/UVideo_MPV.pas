@@ -598,7 +598,7 @@ begin
   Fbo.w := fTexWidth;
   Fbo.h := fTexHeight;
   Fbo.internal_format := GL_RGBA8;
-  FlipY := 1;
+  FlipY := 0;
 
   Params[0].ParamType := MPV_RENDER_PARAM_OPENGL_FBO;
   Params[0].data := @Fbo;
