@@ -357,7 +357,7 @@ begin
   SetOptionString('input-vo-keyboard', 'no', false);
   SetOptionString('load-scripts', 'no', false);
   SetOptionString('keep-open', 'yes', false);
-  SetOptionString('hwdec', 'auto-safe', false);
+  SetOptionString('hwdec', 'auto', false);
 
   ErrorNumber := mpv_initialize(fHandle);
   if ErrorNumber < 0 then

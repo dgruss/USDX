@@ -530,6 +530,9 @@ end;
 
 const
   WINDOW_ICON = 'icons/ultrastardx-icon.png';
+  {$IFDEF Linux}
+  SDL_HINT_VIDEO_X11_FORCE_EGL_USDX = 'SDL_VIDEO_X11_FORCE_EGL';
+  {$ENDIF}
 
 procedure Initialize3D (Title: string);
 var
@@ -650,9 +653,138 @@ var
   Borderless, Fullscreen: boolean;
   Split: boolean;
   Disp: TSDL_DisplayMode;
+  {$IFDEF Linux}
+  RequestedEGL: boolean;
+  {$ENDIF}
 
 label
   NoDoubledResolution;
+
+  procedure DropOpenGLContext;
+  begin
+    if glcontext <> nil then
+      SDL_GL_DeleteContext(glcontext);
+    glcontext := nil;
+  end;
+
+  procedure DropGameWindow;
+  begin
+    if Screen <> nil then
+      SDL_DestroyWindow(Screen);
+    Screen := nil;
+  end;
+
+  procedure CreateGameWindow;
+  begin
+    if Borderless then
+    begin
+      Log.LogStatus('Set Video Mode...   Borderless fullscreen', 'SDL_SetVideoMode');
+      CurrentWindowMode := Mode_Borderless;
+      screen := SDL_CreateWindow('UltraStar Deluxe loading...',
+                Ini.PositionX, Ini.PositionY, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN_DESKTOP or SDL_WINDOW_RESIZABLE);
+    end
+    else if Fullscreen then
+    begin
+      Log.LogStatus('Set Video Mode...   Fullscreen', 'SDL_SetVideoMode');
+      CurrentWindowMode := Mode_Fullscreen;
+      screen := SDL_CreateWindow('UltraStar Deluxe loading...',
+                SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN or SDL_WINDOW_RESIZABLE);
+    end
+    else
+    begin
+      Log.LogStatus('Set Video Mode...   Windowed', 'SDL_SetVideoMode');
+      CurrentWindowMode := Mode_Windowed;
+      screen := SDL_CreateWindow('UltraStar Deluxe loading...',
+                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE);
+    end;
+  end;
+
+  procedure UpdateWindowSize;
+  begin
+    if (screen = nil) then
+    begin
+      Log.LogStatus('Creating window failed: ' + SDL_GetError(), 'SDL_SetVideoMode');
+      Exit;
+    end;
+
+    X:=0; Y:=0;
+    SDL_GetWindowSize(Screen, @ActualW, @ActualH);
+
+    // check if created window has the desired size, otherwise override the config resolution value
+    if SDL_GetWindowDisplayMode(screen, @Disp) = 0 then
+    begin
+      if (Disp.w < W) or (Disp.h < H) then
+      begin
+        Log.LogStatus(Format('Video resolution (%s) exceeded possible size (%s). Override stored config resolution!', [BuildResolutionString(W,H), BuildResolutionString(Disp.w, Disp.h)]), 'SDL_SetVideoMode');
+        Ini.SetResolution(Disp.w, Disp.h, true);
+      end
+      else if Fullscreen and ((Disp.w > W) or (Disp.h > H)) then
+      begin
+        Log.LogStatus(Format('Video resolution not used. Using native fullscreen resolution (%s)', [BuildResolutionString(Disp.w, Disp.h)]), 'SDL_SetVideoMode');
+        Ini.SetResolution(Disp.w, Disp.h, false, true);
+      end;
+
+      X := Disp.w - ActualW;
+      Y := Disp.h - ActualH;
+    end;
+
+    // if screen is out of the visisble desktop area, move it back
+    // this likely happens when creating a Window bigger than the possible desktop size
+    if (SDL_GetWindowFlags(screen) and SDL_WINDOW_FULLSCREEN = 0) and ((screen.x < 0) or (screen.Y < 0)) then
+    begin
+      // TODO: update SDL2
+      //SDL_GetWindowBordersSize(screen, w, h, nil, nil);
+      Log.LogStatus('Bad position for window. Re-position to (0,0)', 'SDL_SetVideoMode');
+      SDL_SetWindowPosition(screen, x, y+x);
+    end;
+  end;
+
+  function CreateOpenGLContext: boolean;
+  var
+    Version: string;
+  begin
+    Result := false;
+
+    if Screen = nil then
+    begin
+      Log.LogStatus('Creating OpenGL context failed: no SDL window', 'SDL_SetVideoMode');
+      Exit;
+    end;
+
+    glcontext := SDL_GL_CreateContext(Screen);
+    if glcontext = nil then
+    begin
+      Log.LogStatus('Creating OpenGL context failed: ' + SDL_GetError(), 'SDL_SetVideoMode');
+      Exit;
+    end;
+
+    if not InitOpenGL() then
+    begin
+      Log.LogStatus('Loading OpenGL entry points failed', 'SDL_SetVideoMode');
+      DropOpenGLContext;
+      Exit;
+    end;
+
+    ReadExtensions;
+
+    if not Assigned(glGetString) then
+    begin
+      Log.LogStatus('OpenGL context is missing glGetString', 'SDL_SetVideoMode');
+      DropOpenGLContext;
+      Exit;
+    end;
+
+    Version := glGetString(GL_VERSION);
+    Result := (Version <> '') and Assigned(glBegin);
+    if not Result then
+    begin
+      Log.LogStatus('OpenGL context is not usable for the fixed-pipeline renderer', 'SDL_SetVideoMode');
+      DropOpenGLContext;
+      Exit;
+    end;
+
+    ReadImplementationProperties;
+  end;
 
 begin
   if (Params.Screens <> -1) then
@@ -707,76 +839,47 @@ NoDoubledResolution:
 
   Log.LogStatus('Creating window', 'SDL_SetVideoMode');
 
-  // TODO: use SDL renderer (for proper scale in "real fullscreen"). Able to choose rendering mode (OpenGL, OpenGL ES, Direct3D)
-  if Borderless then
-  begin
-    Log.LogStatus('Set Video Mode...   Borderless fullscreen', 'SDL_SetVideoMode');
-    CurrentWindowMode := Mode_Borderless;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              Ini.PositionX, Ini.PositionY, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN_DESKTOP or SDL_WINDOW_RESIZABLE);
-  end
-  else if Fullscreen then
-  begin
-    Log.LogStatus('Set Video Mode...   Fullscreen', 'SDL_SetVideoMode');
-    CurrentWindowMode := Mode_Fullscreen;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN or SDL_WINDOW_RESIZABLE);
-  end
+  {$IFDEF Linux}
+  RequestedEGL := true;
+  SDL_GL_ResetAttributes();
+  if SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL_USDX, '1') then
+    Log.LogStatus('Request X11 EGL OpenGL context', 'SDL_SetVideoMode')
   else
   begin
-    Log.LogStatus('Set Video Mode...   Windowed', 'SDL_SetVideoMode');
-    CurrentWindowMode := Mode_Windowed;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE);
+    RequestedEGL := false;
+    Log.LogStatus('Could not request X11 EGL OpenGL context', 'SDL_SetVideoMode');
   end;
+  {$ENDIF}
+
+  // TODO: use SDL renderer (for proper scale in "real fullscreen"). Able to choose rendering mode (OpenGL, OpenGL ES, Direct3D)
+  CreateGameWindow;
 
   //SDL_ShowCursor(0);    just to be able to debug while having mosue cursor
 
-  if (screen = nil) then
-  begin
-    Log.LogCritical('Creating window failed', 'SDL_SetVideoMode');
-  end
-  else
-  begin
-    X:=0; Y:=0;
-    SDL_GetWindowSize(Screen, @ActualW, @ActualH);
-
-    // check if created window has the desired size, otherwise override the config resolution value
-    if SDL_GetWindowDisplayMode(screen, @Disp) = 0 then
-    begin
-      if (Disp.w < W) or (Disp.h < H) then
-      begin
-        Log.LogStatus(Format('Video resolution (%s) exceeded possible size (%s). Override stored config resolution!', [BuildResolutionString(W,H), BuildResolutionString(Disp.w, Disp.h)]), 'SDL_SetVideoMode');
-        Ini.SetResolution(Disp.w, Disp.h, true);
-      end
-      else if Fullscreen and ((Disp.w > W) or (Disp.h > H)) then
-      begin
-        Log.LogStatus(Format('Video resolution not used. Using native fullscreen resolution (%s)', [BuildResolutionString(Disp.w, Disp.h)]), 'SDL_SetVideoMode');
-        Ini.SetResolution(Disp.w, Disp.h, false, true);
-      end;
-
-      X := Disp.w - ActualW;
-      Y := Disp.h - ActualH;
-    end;
-
-    // if screen is out of the visisble desktop area, move it back
-    // this likely happens when creating a Window bigger than the possible desktop size
-    if (SDL_GetWindowFlags(screen) and SDL_WINDOW_FULLSCREEN = 0) and ((screen.x < 0) or (screen.Y < 0)) then
-    begin
-      // TODO: update SDL2
-      //SDL_GetWindowBordersSize(screen, w, h, nil, nil);
-      Log.LogStatus('Bad position for window. Re-position to (0,0)', 'SDL_SetVideoMode');
-      SDL_SetWindowPosition(screen, x, y+x);
-    end;
-  end;
+  UpdateWindowSize;
 
   //LoadOpenGL();
-  glcontext := SDL_GL_CreateContext(Screen);
-  InitOpenGL();
+  if not CreateOpenGLContext then
+  begin
+    {$IFDEF Linux}
+    if RequestedEGL then
+    begin
+      Log.LogStatus('EGL OpenGL context failed; retry normal OpenGL context', 'SDL_SetVideoMode');
+      DropOpenGLContext;
+      DropGameWindow;
+      SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL_USDX, '0');
+      SDL_GL_ResetAttributes();
+      CreateGameWindow;
+      UpdateWindowSize;
+      if not CreateOpenGLContext then
+        Log.LogCritical('Creating fallback OpenGL context failed', 'SDL_SetVideoMode');
+    end
+    else
+    {$ENDIF}
+      Log.LogCritical('Creating OpenGL context failed', 'SDL_SetVideoMode');
+  end;
 
   //   ActivateRenderingContext(
-  ReadExtensions;
-  ReadImplementationProperties;
   Log.LogInfo('OpenGL vendor ' + glGetString(GL_VENDOR), 'UGraphic.InitializeScreen');
   if not (glGetError = GL_NO_ERROR) then
   begin
