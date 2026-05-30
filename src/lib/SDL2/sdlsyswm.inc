@@ -7,6 +7,7 @@
 {$IFNDEF DARWIN}
    {$IF DEFINED (LINUX) OR DEFINED(UNIX)}
       {$DEFINE SDL_VIDEO_DRIVER_X11}
+      {$DEFINE SDL_VIDEO_DRIVER_WAYLAND}
    {$IFEND}
 {$IFEND}
 
@@ -18,19 +19,22 @@
  *  These are the various supported windowing subsystems
  *}
 Type
-   TSDL_SYSWM_TYPE = (
-      SDL_SYSWM_UNKNOWN,
-      SDL_SYSWM_WINDOWS,
-      SDL_SYSWM_X11,
-      SDL_SYSWM_DIRECTFB,
-      SDL_SYSWM_COCOA,
-      SDL_SYSWM_UIKIT,
-      SDL_SYSWM_WAYLAND, // Since SDL 2.0.2
-      SDL_SYSWM_MIR,     // Since SDL 2.0.2
-      SDL_SYSWM_WINRT,   // Since SDL 2.0.3
-      SDL_SYSWM_ANDROID, // Since SDL 2.0.4
-      SDL_SYSWM_VIVANTE  // Since SDL 2.0.5
-   );
+   TSDL_SYSWM_TYPE = UInt32;
+
+Const
+   SDL_SYSWM_UNKNOWN = 0;
+   SDL_SYSWM_WINDOWS = 1;
+   SDL_SYSWM_X11 = 2;
+   SDL_SYSWM_DIRECTFB = 3;
+   SDL_SYSWM_COCOA = 4;
+   SDL_SYSWM_UIKIT = 5;
+   SDL_SYSWM_WAYLAND = 6; // Since SDL 2.0.2
+   SDL_SYSWM_MIR = 7;     // Since SDL 2.0.2
+   SDL_SYSWM_WINRT = 8;   // Since SDL 2.0.3
+   SDL_SYSWM_ANDROID = 9; // Since SDL 2.0.4
+   SDL_SYSWM_VIVANTE = 10; // Since SDL 2.0.5
+
+Type
 
 /// sdl_syswm.h uses anonymous structs, declared right in SDL_SysWMmsg.
 /// Since Pascal does not allow this, we workaround by introducing named types
@@ -126,10 +130,24 @@ Type
    end;
 {$ENDIF}
 {$IFDEF SDL_VIDEO_DRIVER_WAYLAND} // Since SDL 2.0.2
+   wl_display = Pointer;
+   wl_surface = Pointer;
+   wl_shell_surface = Pointer;
+   wl_egl_window = Pointer;
+   xdg_surface = Pointer;
+   xdg_toplevel = Pointer;
+   xdg_popup = Pointer;
+   xdg_positioner = Pointer;
+
    __WMINFO_WAYLAND = record
       display: wl_display;             {**< Wayland display *}
       surface: wl_surface;             {**< Wayland surface *}
-      shell_surface: wl_shell_surface; {**< Wayland shell_surface (window manager handle) *}
+      shell_surface: wl_shell_surface; {**< Deprecated Wayland shell_surface (window manager handle) *}
+      egl_window: wl_egl_window;       {**< Wayland EGL window *}
+      xdg_surface: xdg_surface;        {**< Wayland xdg surface *}
+      xdg_toplevel: xdg_toplevel;      {**< Wayland xdg toplevel role *}
+      xdg_popup: xdg_popup;            {**< Wayland xdg popup role *}
+      xdg_positioner: xdg_positioner;  {**< Wayland xdg positioner *}
    end;
 {$ENDIF}
 {$IFDEF SDL_VIDEO_DRIVER_MIR} // Since SDL 2.0.2

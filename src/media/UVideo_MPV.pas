@@ -16,6 +16,7 @@ uses
   SysUtils,
   Math,
   ctypes,
+  sdl2,
   dglOpenGL,
   mpv,
   UCommon,
@@ -80,12 +81,14 @@ type
     function SetPropertyFlag(const Name: AnsiString; Value: boolean): boolean;
     function SetPropertyDouble(const Name: AnsiString; Value: double): boolean;
     function SetPropertyString(const Name, Value: AnsiString): boolean;
+    function GetPropertyString(const Name: AnsiString; out Value: string): boolean;
     function GetPropertyInt64(const Name: AnsiString; out Value: Int64): boolean;
     function GetPropertyDouble(const Name: AnsiString; out Value: double): boolean;
     function WaitForFileLoaded(TimeoutSeconds: double): boolean;
     procedure DrainEvents();
     function LoadFile(const FileName: IPath): boolean;
     function UpdateVideoProperties(): boolean;
+    procedure LogVideoProperties();
     function EnsureRenderTarget(): boolean;
     procedure ReleaseRenderTarget();
     function RenderToTexture(): boolean;
@@ -292,6 +295,20 @@ begin
   Result := ErrorNumber >= 0;
 end;
 
+function TVideo_MPV.GetPropertyString(const Name: AnsiString; out Value: string): boolean;
+var
+  PropertyValue: PAnsiChar;
+begin
+  Value := '';
+  PropertyValue := mpv_get_property_string(fHandle, PAnsiChar(Name));
+  Result := PropertyValue <> nil;
+  if Result then
+  begin
+    Value := StrPas(PropertyValue);
+    mpv_free(PropertyValue);
+  end;
+end;
+
 function TVideo_MPV.GetPropertyInt64(const Name: AnsiString; out Value: Int64): boolean;
 var
   ErrorNumber: cint;
@@ -357,7 +374,11 @@ begin
   SetOptionString('input-vo-keyboard', 'no', false);
   SetOptionString('load-scripts', 'no', false);
   SetOptionString('keep-open', 'yes', false);
+{$IFDEF Linux}
+  SetOptionString('hwdec', 'vaapi', false);
+{$ELSE}
   SetOptionString('hwdec', 'auto', false);
+{$ENDIF}
 
   ErrorNumber := mpv_initialize(fHandle);
   if ErrorNumber < 0 then
@@ -374,8 +395,16 @@ var
   ApiType: AnsiString;
   InitParams: Tmpv_opengl_init_params;
   AdvancedControl: cint;
-  Params: array[0..3] of Tmpv_render_param;
+  Params: array[0..4] of Tmpv_render_param;
+  ParamIndex: integer;
   ErrorNumber: cint;
+{$IFDEF Linux}
+  WindowInfo: TSDL_SysWMinfo;
+  CurrentVideoDriver: PAnsiChar;
+  CurrentVideoDriverName: string;
+  X11Display: Pointer;
+  WaylandDisplay: Pointer;
+{$ENDIF}
 begin
   Result := false;
   if not Assigned(glBindFramebuffer) or
@@ -392,14 +421,61 @@ begin
   InitParams.get_proc_address_ctx := nil;
   AdvancedControl := 1;
 
-  Params[0].ParamType := MPV_RENDER_PARAM_API_TYPE;
-  Params[0].data := PAnsiChar(ApiType);
-  Params[1].ParamType := MPV_RENDER_PARAM_OPENGL_INIT_PARAMS;
-  Params[1].data := @InitParams;
-  Params[2].ParamType := MPV_RENDER_PARAM_ADVANCED_CONTROL;
-  Params[2].data := @AdvancedControl;
-  Params[3].ParamType := MPV_RENDER_PARAM_INVALID;
-  Params[3].data := nil;
+  ParamIndex := 0;
+  Params[ParamIndex].ParamType := MPV_RENDER_PARAM_API_TYPE;
+  Params[ParamIndex].data := PAnsiChar(ApiType);
+  Inc(ParamIndex);
+
+  Params[ParamIndex].ParamType := MPV_RENDER_PARAM_OPENGL_INIT_PARAMS;
+  Params[ParamIndex].data := @InitParams;
+  Inc(ParamIndex);
+
+{$IFDEF Linux}
+  CurrentVideoDriver := SDL_GetCurrentVideoDriver();
+  if CurrentVideoDriver <> nil then
+    CurrentVideoDriverName := StrPas(CurrentVideoDriver)
+  else
+    CurrentVideoDriverName := 'unknown';
+  X11Display := nil;
+  WaylandDisplay := nil;
+  FillChar(WindowInfo, SizeOf(WindowInfo), 0);
+  SDL_VERSION(WindowInfo.version);
+  if (Screen <> nil) and (SDL_GetWindowWMInfo(Screen, @WindowInfo) = SDL_TRUE) then
+  begin
+    case WindowInfo.subsystem of
+      SDL_SYSWM_X11:
+      begin
+        X11Display := WindowInfo.x11.display;
+        Params[ParamIndex].ParamType := MPV_RENDER_PARAM_X11_DISPLAY;
+        Params[ParamIndex].data := X11Display;
+        Inc(ParamIndex);
+        Log.LogInfo('Passing X11 display to libmpv renderer', 'TVideo_MPV.Open');
+      end;
+      SDL_SYSWM_WAYLAND:
+      begin
+        WaylandDisplay := WindowInfo.wl.display;
+        Params[ParamIndex].ParamType := MPV_RENDER_PARAM_WL_DISPLAY;
+        Params[ParamIndex].data := WaylandDisplay;
+        Inc(ParamIndex);
+        Log.LogInfo('Passing Wayland display to libmpv renderer', 'TVideo_MPV.Open');
+      end;
+      else
+        Log.LogWarn('Unsupported SDL window subsystem for libmpv VAAPI OpenGL interop: ' +
+            IntToStr(Ord(WindowInfo.subsystem)) + ', SDL video driver=' +
+            CurrentVideoDriverName, 'TVideo_MPV.Open');
+    end;
+  end
+  else
+    Log.LogWarn('No native display available for libmpv VAAPI OpenGL interop, SDL video driver=' +
+        CurrentVideoDriverName, 'TVideo_MPV.Open');
+{$ENDIF}
+
+  Params[ParamIndex].ParamType := MPV_RENDER_PARAM_ADVANCED_CONTROL;
+  Params[ParamIndex].data := @AdvancedControl;
+  Inc(ParamIndex);
+
+  Params[ParamIndex].ParamType := MPV_RENDER_PARAM_INVALID;
+  Params[ParamIndex].data := nil;
 
   ErrorNumber := mpv_render_context_create(fRenderContext, fHandle, @Params[0]);
   if ErrorNumber < 0 then
@@ -506,6 +582,36 @@ begin
     fAspect := fTexWidth / fTexHeight;
 
   Result := true;
+end;
+
+procedure TVideo_MPV.LogVideoProperties();
+var
+  Codec: string;
+  HwDec: string;
+  PixelFormat: string;
+  HwPixelFormat: string;
+  Details: string;
+
+  procedure AddDetail(const Name, Value: string);
+  begin
+    if Details <> '' then
+      Details := Details + ', ';
+    Details := Details + Name + '=' + Value;
+  end;
+
+begin
+  Details := '';
+  if GetPropertyString('video-codec', Codec) and (Codec <> '') then
+    AddDetail('codec', Codec);
+  if GetPropertyString('hwdec-current', HwDec) and (HwDec <> '') then
+    AddDetail('hwdec', HwDec);
+  if GetPropertyString('video-params/pixelformat', PixelFormat) and (PixelFormat <> '') then
+    AddDetail('pixelformat', PixelFormat);
+  if GetPropertyString('video-params/hw-pixelformat', HwPixelFormat) and (HwPixelFormat <> '') then
+    AddDetail('hw-pixelformat', HwPixelFormat);
+
+  if Details <> '' then
+    Log.LogInfo('libmpv video properties: ' + Details, 'TVideo_MPV.Open');
 end;
 
 procedure TVideo_MPV.ReleaseRenderTarget();
@@ -653,13 +759,29 @@ begin
   Result := false;
   Reset();
 
+  Log.LogInfo('Opening libmpv video: create handle', 'TVideo_MPV.Open');
   if not CreateMpvHandle() then
   begin
     Close();
     Exit;
   end;
 
-  if not LoadFile(FileName) or not UpdateVideoProperties() or not EnsureRenderTarget() then
+  Log.LogInfo('Opening libmpv video: load file', 'TVideo_MPV.Open');
+  if not LoadFile(FileName) then
+  begin
+    Close();
+    Exit;
+  end;
+
+  Log.LogInfo('Opening libmpv video: query properties', 'TVideo_MPV.Open');
+  if not UpdateVideoProperties() then
+  begin
+    Close();
+    Exit;
+  end;
+
+  Log.LogInfo('Opening libmpv video: create render target', 'TVideo_MPV.Open');
+  if not EnsureRenderTarget() then
   begin
     Close();
     Exit;
@@ -668,7 +790,8 @@ begin
   fOpened := true;
   fPaused := true;
   fEOF := false;
-  SetPropertyFlag('pause', true);
+  Log.LogInfo('Opening libmpv video: log video properties', 'TVideo_MPV.Open');
+  LogVideoProperties();
   Log.LogInfo('Using libmpv video backend for "' + FileName.ToNative + '"', 'TVideo_MPV.Open');
   Result := true;
 end;
