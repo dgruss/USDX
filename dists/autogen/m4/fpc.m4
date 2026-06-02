@@ -158,6 +158,9 @@ case "$host_os" in
     case "$host_cpu" in
       x86_64|amd64)
         PFLAGS+=" -Px86_64 "
+        FPC_PLATFORM=`${PPC} -Px86_64 -iTO`
+        FPC_PROCESSOR=`${PPC} -Px86_64 -iTP`
+        FPC_TARGET=${FPC_PROCESSOR}-${FPC_PLATFORM}
         ;;
     esac
     ;;

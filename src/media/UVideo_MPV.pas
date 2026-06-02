@@ -29,6 +29,8 @@ uses
 
 const
   ReflectionH = 0.5;
+  MPV_MAX_RENDER_WIDTH = 1920;
+  MPV_MAX_RENDER_HEIGHT = 1080;
   MPV_SYNC_INTERVAL = 0.5;
   MPV_SYNC_THRESHOLD = 0.050;
   MPV_EXTERNAL_SEEK_THRESHOLD = 1.0;
@@ -49,6 +51,7 @@ type
     fHandle: Pmpv_handle;
     fRenderContext: Pmpv_render_context;
     fNeedsRender: boolean;
+    fLoggedVideoProperties: boolean;
 
     fFrameTex: GLuint;
     fFrameFbo: GLuint;
@@ -232,6 +235,7 @@ begin
   fEOF := false;
   fLoop := false;
   fNeedsRender := false;
+  fLoggedVideoProperties := false;
   fFrameTexValid := false;
 
   fScreen := 1;
@@ -547,6 +551,8 @@ var
   DisplayWidth, DisplayHeight: Int64;
   StorageWidth, StorageHeight: Int64;
   Aspect: double;
+  Scale: double;
+  SourceWidth, SourceHeight: cardinal;
 begin
   Result := false;
   DisplayWidth := 0;
@@ -571,15 +577,31 @@ begin
     Exit;
   end;
 
-  fTexWidth := DisplayWidth;
-  fTexHeight := DisplayHeight;
-  fScaledWidth := fTexWidth;
-  fScaledHeight := fTexHeight;
-
   if GetPropertyDouble('video-params/aspect', Aspect) and (Aspect > 0) then
     fAspect := Aspect
   else
-    fAspect := fTexWidth / fTexHeight;
+    fAspect := DisplayWidth / DisplayHeight;
+
+  SourceWidth := DisplayWidth;
+  SourceHeight := DisplayHeight;
+  fTexWidth := SourceWidth;
+  fTexHeight := SourceHeight;
+  if (fTexWidth > MPV_MAX_RENDER_WIDTH) or (fTexHeight > MPV_MAX_RENDER_HEIGHT) then
+  begin
+    Scale := Min(MPV_MAX_RENDER_WIDTH / fTexWidth, MPV_MAX_RENDER_HEIGHT / fTexHeight);
+    fTexWidth := Round(SourceWidth * Scale);
+    fTexHeight := Round(SourceHeight * Scale);
+    if fTexWidth < 1 then
+      fTexWidth := 1;
+    if fTexHeight < 1 then
+      fTexHeight := 1;
+
+    Log.LogInfo('Capped libmpv render target from ' + IntToStr(SourceWidth) + 'x' +
+      IntToStr(SourceHeight) + ' to ' + IntToStr(fTexWidth) + 'x' +
+      IntToStr(fTexHeight), 'TVideo_MPV.Open');
+  end;
+  fScaledWidth := fTexWidth;
+  fScaledHeight := fTexHeight;
 
   Result := true;
 end;
@@ -604,14 +626,16 @@ begin
   if GetPropertyString('video-codec', Codec) and (Codec <> '') then
     AddDetail('codec', Codec);
   if GetPropertyString('hwdec-current', HwDec) and (HwDec <> '') then
-    AddDetail('hwdec', HwDec);
+    AddDetail('hwdec', HwDec)
+  else
+    AddDetail('hwdec', 'none');
   if GetPropertyString('video-params/pixelformat', PixelFormat) and (PixelFormat <> '') then
     AddDetail('pixelformat', PixelFormat);
   if GetPropertyString('video-params/hw-pixelformat', HwPixelFormat) and (HwPixelFormat <> '') then
     AddDetail('hw-pixelformat', HwPixelFormat);
 
   if Details <> '' then
-    Log.LogInfo('libmpv video properties: ' + Details, 'TVideo_MPV.Open');
+    Log.LogInfo('libmpv video properties: ' + Details, 'TVideo_MPV.GetFrame');
 end;
 
 procedure TVideo_MPV.ReleaseRenderTarget();
@@ -726,6 +750,11 @@ begin
   end;
 
   fFrameTexValid := true;
+  if not fLoggedVideoProperties then
+  begin
+    fLoggedVideoProperties := true;
+    LogVideoProperties();
+  end;
   Result := true;
 end;
 
@@ -790,9 +819,12 @@ begin
   fOpened := true;
   fPaused := true;
   fEOF := false;
-  Log.LogInfo('Opening libmpv video: log video properties', 'TVideo_MPV.Open');
-  LogVideoProperties();
-  Log.LogInfo('Using libmpv video backend for "' + FileName.ToNative + '"', 'TVideo_MPV.Open');
+  // Some Windows driver/libmpv combinations can block on optional string
+  // property queries immediately after renderer setup. The dimensions above
+  // are enough for playback, so keep the open path free of diagnostic probes.
+  Log.LogInfo('Using libmpv video backend for "' + FileName.ToNative + '" (' +
+    IntToStr(fTexWidth) + 'x' + IntToStr(fTexHeight) + ', aspect ' +
+    FloatToStr(fAspect) + ')', 'TVideo_MPV.Open');
   Result := true;
 end;
 
