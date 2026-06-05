@@ -88,6 +88,7 @@ type
   Tmpv_get_property = function(ctx: Pmpv_handle; name: PAnsiChar; format: cint; data: Pointer): cint; cdecl;
   Tmpv_get_property_string = function(ctx: Pmpv_handle; name: PAnsiChar): PAnsiChar; cdecl;
   Tmpv_command = function(ctx: Pmpv_handle; args: PPAnsiChar): cint; cdecl;
+  Tmpv_command_async = function(ctx: Pmpv_handle; reply_userdata: QWord; args: PPAnsiChar): cint; cdecl;
   Tmpv_wait_event = function(ctx: Pmpv_handle; timeout: cdouble): Pmpv_event; cdecl;
   Tmpv_render_context_create = function(var res: Pmpv_render_context; mpv: Pmpv_handle; params: Pmpv_render_param): cint; cdecl;
   Tmpv_render_context_free = procedure(ctx: Pmpv_render_context); cdecl;
@@ -110,6 +111,7 @@ var
   mpv_get_property: Tmpv_get_property;
   mpv_get_property_string: Tmpv_get_property_string;
   mpv_command: Tmpv_command;
+  mpv_command_async: Tmpv_command_async;
   mpv_wait_event: Tmpv_wait_event;
 
   mpv_render_context_create: Tmpv_render_context_create;
@@ -192,6 +194,7 @@ begin
   mpv_get_property := Tmpv_get_property(LoadSymbol('mpv_get_property'));
   mpv_get_property_string := Tmpv_get_property_string(LoadSymbol('mpv_get_property_string'));
   mpv_command := Tmpv_command(LoadSymbol('mpv_command'));
+  mpv_command_async := Tmpv_command_async(LoadSymbol('mpv_command_async'));
   mpv_wait_event := Tmpv_wait_event(LoadSymbol('mpv_wait_event'));
   mpv_render_context_create := Tmpv_render_context_create(LoadSymbol('mpv_render_context_create'));
   mpv_render_context_free := Tmpv_render_context_free(LoadSymbol('mpv_render_context_free'));
@@ -214,6 +217,7 @@ begin
     Assigned(mpv_get_property) and
     Assigned(mpv_get_property_string) and
     Assigned(mpv_command) and
+    Assigned(mpv_command_async) and
     Assigned(mpv_wait_event) and
     Assigned(mpv_render_context_create) and
     Assigned(mpv_render_context_free) and

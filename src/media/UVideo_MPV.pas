@@ -80,6 +80,7 @@ type
     function CreateMpvHandle(): boolean;
     function CreateRenderContext(): boolean;
     function Command(const Args: array of AnsiString): boolean;
+    function CommandAsync(const Args: array of AnsiString): boolean;
     function SetOptionString(const Name, Value: AnsiString; Required: boolean = true): boolean;
     function SetPropertyFlag(const Name: AnsiString; Value: boolean): boolean;
     function SetPropertyDouble(const Name: AnsiString; Value: double): boolean;
@@ -347,6 +348,23 @@ begin
   Result := ErrorNumber >= 0;
   if not Result then
     Log.LogError('mpv command failed: ' + MpvError(ErrorNumber), 'TVideo_MPV');
+end;
+
+function TVideo_MPV.CommandAsync(const Args: array of AnsiString): boolean;
+var
+  ArgPointers: array of PAnsiChar;
+  I: integer;
+  ErrorNumber: cint;
+begin
+  SetLength(ArgPointers, Length(Args) + 1);
+  for I := 0 to High(Args) do
+    ArgPointers[I] := PAnsiChar(Args[I]);
+  ArgPointers[High(ArgPointers)] := nil;
+
+  ErrorNumber := mpv_command_async(fHandle, 0, @ArgPointers[0]);
+  Result := ErrorNumber >= 0;
+  if not Result then
+    Log.LogError('async mpv command failed: ' + MpvError(ErrorNumber), 'TVideo_MPV');
 end;
 
 function TVideo_MPV.CreateMpvHandle(): boolean;
@@ -1118,21 +1136,26 @@ procedure TVideo_MPV.Play;
 begin
   fPaused := false;
   if fHandle <> nil then
-    SetPropertyFlag('pause', false);
+    CommandAsync(['set', 'pause', 'no']);
 end;
 
 procedure TVideo_MPV.Pause;
 begin
   fPaused := not fPaused;
   if fHandle <> nil then
-    SetPropertyFlag('pause', fPaused);
+  begin
+    if fPaused then
+      CommandAsync(['set', 'pause', 'yes'])
+    else
+      CommandAsync(['set', 'pause', 'no']);
+  end;
 end;
 
 procedure TVideo_MPV.Stop;
 begin
   fPaused := true;
   if fHandle <> nil then
-    SetPropertyFlag('pause', true);
+    CommandAsync(['set', 'pause', 'yes']);
 end;
 
 procedure TVideo_MPV.SetLoop(Enable: boolean);
@@ -1142,9 +1165,9 @@ begin
   if fHandle <> nil then
   begin
     if Enable then
-      SetPropertyString('loop-file', 'inf')
+      CommandAsync(['set', 'loop-file', 'inf'])
     else
-      SetPropertyString('loop-file', 'no');
+      CommandAsync(['set', 'loop-file', 'no']);
   end;
 end;
 
@@ -1170,7 +1193,7 @@ begin
   fFrameTexValid := false;
   fEOF := false;
 
-  if not SetPropertyDouble('time-pos', Time) then
+  if not CommandAsync(['seek', FloatToStrF(Time, ffFixed, 18, 6), 'absolute+exact']) then
     Log.LogError('Failed to seek libmpv video', 'TVideo_MPV.SetPosition');
 end;
 
