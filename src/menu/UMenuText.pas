@@ -36,7 +36,7 @@ interface
 uses
   math,
   SysUtils,
-  sdl2,
+  SDL3,
   UText,
   UMenuInteract;
 

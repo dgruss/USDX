@@ -43,7 +43,7 @@ uses
   UScreenPartyTournamentWin,
   UScreenSingController,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils,
   UText;
 
@@ -154,8 +154,8 @@ begin
         end;
     end;
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check special keys
     case PressedKey of
@@ -199,7 +199,7 @@ begin
       begin
        if not (PartyTournament.TournamentFinish) then
        begin
-        if (SDL_ModState = KMOD_LCTRL) then
+        if (SDL_ModState = SDL_KMOD_LCTRL) then
          begin
            if (Interaction = PartyTournament.Next.Player1) then
              Player := 0
@@ -218,7 +218,7 @@ begin
       begin
        if not (PartyTournament.TournamentFinish) then
        begin
-         if (SDL_ModState = KMOD_LCTRL) then
+         if (SDL_ModState = SDL_KMOD_LCTRL) then
          begin
            if (Interaction = PartyTournament.Next.Player1) then
              Player := 0

@@ -40,7 +40,7 @@ uses
   IniFiles,
   UConfig,
   UUnicodeStringHelper,
-  SDL2;
+  SDL3;
 
 type
   IPath = interface;

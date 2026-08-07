@@ -36,7 +36,7 @@ interface
 uses
   UText,
   UMenuText,
-  sdl2,
+  SDL3,
   UMenuInteract,
   URenderer,
   UMenuWidget;

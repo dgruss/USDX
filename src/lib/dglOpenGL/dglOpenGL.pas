@@ -185,7 +185,7 @@ uses
   {$IFDEF DGL_WIN}, Windows{$ENDIF}
   {$IFDEF DGL_64BIT} ,math {$ENDIF}
   {$IFDEF DGL_LINUX}, X, XLib, XUtil{$ENDIF}
-  {$IFDEF DGL_USE_SDL}, SDL2{$ENDIF}
+  {$IFDEF DGL_USE_SDL}, SDL3{$ENDIF}
   ;
 
 type
@@ -15288,7 +15288,7 @@ begin
   // load library
 {$IFDEF DGL_USE_SDL}
   GL_LibHandle := nil;
-  if SDL_GL_LoadLibrary(nil) = 0 then
+  if SDL_GL_LoadLibrary(nil) then
     GL_LibHandle := @GL_LibHandle;
 {$ELSE}
   GL_LibHandle := dglLoadLibrary(PChar(LibName));
@@ -20686,4 +20686,3 @@ initialization
 finalization
 
 end.
-

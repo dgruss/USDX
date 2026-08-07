@@ -35,7 +35,7 @@ interface
 
 uses
   SysUtils,
-  sdl2,
+  SDL3,
   UText,
   UCommon,
   UGraphicClasses,

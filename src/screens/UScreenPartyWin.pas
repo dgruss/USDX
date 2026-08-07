@@ -38,7 +38,7 @@ uses
   UMenu,
   UMusic,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type

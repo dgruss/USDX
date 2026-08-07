@@ -33,7 +33,7 @@ interface
 uses
   dglOpenGL,
   matrix,
-  sdl2,
+  SDL3,
   UPath,
   URenderer;
 
@@ -476,7 +476,7 @@ begin
     glDeleteTextures(1, @WhiteTexture);
   FreeMem(MappedBuffer);
   inherited;
-  SDL_GL_DeleteContext(glcontext);
+  SDL_GL_DestroyContext(glcontext);
 end;
 
 // Compile all shaders and link programs. The shader source is provided by the subclass, derived from the abstracted version
@@ -1616,8 +1616,10 @@ begin
 end;
 
 function TRenderer_OpenGLBase.GetVSync(): boolean;
+var
+  Interval: integer;
 begin
-  Result := SDL_GL_GetSwapInterval() = 1;
+  Result := SDL_GL_GetSwapInterval(@Interval) and (Interval = 1);
 end;
 
 procedure TRenderer_OpenGLBase.SwapBuffers();

@@ -46,7 +46,7 @@ uses
   UScreenPartyScore,
   UScreenPartyWin,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type
@@ -286,8 +286,8 @@ function TScreenPartyPlayer.ParseInput(PressedKey: cardinal; CharCode: UCS4Char;
   var
     isAlternate: boolean;
   begin
-    isAlternate := (SDL_ModState = KMOD_LSHIFT) or (SDL_ModState = KMOD_RSHIFT);
-    isAlternate := isAlternate or (SDL_ModState = KMOD_LALT); // legacy key combination
+    isAlternate := (SDL_ModState = SDL_KMOD_LSHIFT) or (SDL_ModState = SDL_KMOD_RSHIFT);
+    isAlternate := isAlternate or (SDL_ModState = SDL_KMOD_LALT); // legacy key combination
 
     if isAlternate then Ini.NameTemplate[index] := Button[Interactions[Interaction].Num].Text[0].Text
     else Button[Interactions[Interaction].Num].Text[0].Text := Ini.NameTemplate[index];
@@ -296,8 +296,8 @@ begin
   Result := true;
 
   if (PressedDown) then
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-        + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT)
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+        + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT)
   else
     SDL_ModState := 0;
 
@@ -368,7 +368,7 @@ begin
     // functions like this one, called so many times
     SDLK_DOWN:
       begin
-        if (Interaction in [1, 7, 13]) and (SDL_ModState = KMOD_LCTRL) then
+        if (Interaction in [1, 7, 13]) and (SDL_ModState = SDL_KMOD_LCTRL) then
         begin
 
           case Interaction of
@@ -386,7 +386,7 @@ begin
       end;
     SDLK_UP:
       begin
-        if (Interaction in [1, 7, 13]) and (SDL_ModState = KMOD_LCTRL) then
+        if (Interaction in [1, 7, 13]) and (SDL_ModState = SDL_KMOD_LCTRL) then
         begin
 
           case Interaction of
@@ -446,7 +446,7 @@ begin
       end;
     SDLK_R:
       begin
-        if (SDL_ModState = KMOD_LCTRL) then
+        if (SDL_ModState = SDL_KMOD_LCTRL) then
         begin
           AudioPlayback.PlaySound(SoundLib.Option);
           //InteractDec;

@@ -41,7 +41,7 @@ uses
   UMenu,
   UMusic,
   UThemes,
-  sdl2;
+  SDL3;
 
 type
   TScreenOptionsThemes = class(TOptionsMenu)

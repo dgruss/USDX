@@ -35,7 +35,7 @@ interface
 
 uses
   Classes,
-  sdl2,
+  SDL3,
   SysUtils,
   URingBuffer,
   UMusic,

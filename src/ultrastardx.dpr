@@ -64,8 +64,8 @@ uses
   AnyAscii               in 'lib\anyascii\anyascii.pas',
   SQLiteTable3  in 'lib\SQLite\SQLiteTable3.pas',
   SQLite3       in 'lib\SQLite\SQLite3.pas',
-  sdl2                   in 'lib\SDL2\sdl2.pas',
-  SDL2_image             in 'lib\SDL2\SDL2_image.pas',
+  SDL3                   in 'lib\SDL3\SDL3.pas',
+  SDL3_image             in 'lib\SDL3\SDL3_image.pas',
   //new work on current OpenGL implementation
   dglOpenGL              in 'lib\dglOpenGL\dglOpenGL.pas',
   UMediaCore_SDL         in 'media\UMediaCore_SDL.pas',

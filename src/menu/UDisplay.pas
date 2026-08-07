@@ -36,7 +36,7 @@ interface
 uses
   UCommon,
   Math,
-  sdl2,
+  SDL3,
   SysUtils,
   UMenu,
   UPath,
@@ -512,7 +512,10 @@ begin
     Cursor_HiddenByScreen := true;
 
 
-  SDL_ShowCursor(Cursor);
+  if Cursor <> 0 then
+    SDL_ShowCursor
+  else
+    SDL_HideCursor;
 
   if (Ini.Mouse = 2) then
   begin
@@ -773,9 +776,8 @@ begin
   // Needs to be tested. KaMiSchi Sept 2008
   // in this case one may have to add " glext, " to the list of used units
   //  glReadPixels(0, 0, ScreenW, ScreenH, GL_BGR, GL_UNSIGNED_BYTE, ScreenData);
-  Surface := SDL_CreateRGBSurfaceFrom(
-      ScreenData, ScreenW, ScreenH, 24, RowSize,
-      $0000FF, $00FF00, $FF0000, 0);
+  Surface := SDL_CreateSurfaceFrom(
+      ScreenW, ScreenH, SDL_PIXELFORMAT_BGR24, ScreenData, RowSize);
 
    Success := WriteJPGImage(FileName, Surface, 95);
   //  Success := WriteBMPImage(FileName, Surface);
@@ -785,7 +787,7 @@ begin
   else
     ScreenPopupError.ShowPopup(Language.Translate('SCREENSHOT_FAILED'));
 
-  SDL_FreeSurface(Surface);
+  SDL_DestroySurface(Surface);
   FreeMem(ScreenData);
 
 end;

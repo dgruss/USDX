@@ -58,7 +58,7 @@ uses
     UMidiInput,
     {$ENDIF}
   {$ENDIF}
-  sdl2,
+  SDL3,
   strutils,
   SysUtils;
 
@@ -531,8 +531,8 @@ var
 begin
   Result := true;
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT + KMOD_RALT {+ KMOD_CAPS});
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT + SDL_KMOD_RALT {+ SDL_KMOD_CAPS});
 
   {$IFDEF UseMIDIPort}
   if PressedDown and
@@ -587,13 +587,13 @@ begin
       SDLK_R: ReloadSong(SDL_ModState);
       SDLK_D:
         begin
-          if (SDL_ModState = KMOD_LSHIFT) then HandleDivideBPM(SDL_ModState);
-          if (SDL_ModState = KMOD_LCTRL or KMOD_LSHIFT) then ToggleDuet(SDL_ModState);
+          if (SDL_ModState = SDL_KMOD_LSHIFT) then HandleDivideBPM(SDL_ModState);
+          if (SDL_ModState = SDL_KMOD_LCTRL or SDL_KMOD_LSHIFT) then ToggleDuet(SDL_ModState);
         end;
       SDLK_M: HandleMultiplyBPM(SDL_ModState);
       SDLK_C: CapitalizeLyrics(SDL_ModState);
       SDLK_V:
-        if (SDL_ModState = 0) or (SDL_ModState = KMOD_LALT) then HandleVideo(SDL_ModState)
+        if (SDL_ModState = 0) or (SDL_ModState = SDL_KMOD_LALT) then HandleVideo(SDL_ModState)
         else HandlePaste(SDL_ModState);
       SDLK_T: HandleFixTimings(SDL_ModState);
       SDLK_P: HandlePlaySentence(SDL_ModState);
@@ -602,7 +602,7 @@ begin
       SDLK_Z: Undo(SDL_ModState);
       SDLK_ESCAPE: LeaveScope(SDL_ModState);
       SDLK_TAB: ShowPopupHelp(SDL_ModState);
-      SDLK_BACKQUOTE: IncreaseNoteLength(SDL_ModState);
+      SDLK_GRAVE: IncreaseNoteLength(SDL_ModState);
       SDLK_EQUALS, // for keyboards which produce the EQUALS symbol without SHIFT modifier
         SDLK_PLUS: HandleBPMIncrease(SDL_ModState); // for keyboards which produce the PLUS symbol without SHIFT modifier
       SDLK_MINUS: HandleBPMDecrease(SDL_ModState);
@@ -643,7 +643,7 @@ begin
     Exit;
   end;
 
-  SaveSongToFile(SDL_ModState = KMOD_LSHIFT);
+  SaveSongToFile(SDL_ModState = SDL_KMOD_LSHIFT);
 end;
 
 
@@ -654,7 +654,7 @@ var
   LineIndex: Integer;
 begin
   CopyToUndo;
-  if SDL_ModState and KMOD_SHIFT <> 0 then
+  if SDL_ModState and SDL_KMOD_SHIFT <> 0 then
   begin
     if (CurrentSong.HasPreview) and
         (CurrentTrack = MedleyNotes.Preview.track) and
@@ -692,7 +692,7 @@ begin
   end
   else if InRange(CurrentSong.PreviewStart, 0.0, AudioPlayback.Length) then
   begin
-    if SDL_ModState = KMOD_LALT then
+    if SDL_ModState = SDL_KMOD_LALT then
     begin // jump and play
       // simulate sentence switch to clear props
       PreviousSentence;
@@ -760,7 +760,7 @@ begin
 
   MedleyNotes.isCustom := true;
   CurrentSong.Medley.Source := msTag;
-  if SDL_ModState = KMOD_LSHIFT then // medley end note
+  if SDL_ModState = SDL_KMOD_LSHIFT then // medley end note
   begin
     if MedleyNotes.isEnd then // if end is already set
     begin
@@ -860,7 +860,7 @@ begin
   end;
 
   //Medley End Note
-  if (SDL_ModState = KMOD_LSHIFT) then
+  if (SDL_ModState = SDL_KMOD_LSHIFT) then
   begin
     if (MedleyNotes.IsEnd) then
     begin
@@ -906,7 +906,7 @@ begin
       Text[TextInfo].Text := Language.Translate('EDIT_INFO_NO_MEDLEY_START');
   end;
 
-  if (SDL_ModState = KMOD_LALT) then
+  if (SDL_ModState = SDL_KMOD_LALT) then
   begin
     Writeln('ALT+J');
     // simulate sentence switch to clear props
@@ -1047,7 +1047,7 @@ end;
 procedure TScreenEditSub.HandleDivideBPM(SDL_ModState: word);
 begin
   // Divide lengths by 2
-  if (SDL_ModState = KMOD_LSHIFT) then
+  if (SDL_ModState = SDL_KMOD_LSHIFT) then
   begin
     CopyToUndo;
     DivideBPM;
@@ -1060,7 +1060,7 @@ end;
 procedure TScreenEditSub.ToggleDuet(SDL_ModState: word);
 begin
   // create duet or convert duet to normal song
-  if (SDL_ModState = KMOD_LCTRL or KMOD_LSHIFT) then
+  if (SDL_ModState = SDL_KMOD_LCTRL or SDL_KMOD_LSHIFT) then
   begin
     if (CurrentSong.isDuet) then
     begin
@@ -1080,7 +1080,7 @@ end;
 procedure TScreenEditSub.HandleMultiplyBPM(SDL_ModState: word);
 begin
   // Multiply lengths by 2
-  if (SDL_ModState = KMOD_LSHIFT) then
+  if (SDL_ModState = SDL_KMOD_LSHIFT) then
   begin
     CopyToUndo;
     MultiplyBPM;
@@ -1104,7 +1104,7 @@ begin
     end;
 
   // Correct spaces
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
     begin
       CopyToUndo;
       LyricsCorrectSpaces;
@@ -1112,7 +1112,7 @@ begin
     end;
 
   // Copy sentence
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     MarkCopySrc;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_MARKED_FOR_COPY');
@@ -1124,7 +1124,7 @@ end;
       // SDLK_V: HandleVideo; HandlePaste;
 procedure TScreenEditSub.HandleVideo(SDL_ModState: word);
 begin
-  if (SDL_ModState = 0) or (SDL_ModState = KMOD_LALT) then // play current line/remainder of song with video
+  if (SDL_ModState = 0) or (SDL_ModState = SDL_KMOD_LALT) then // play current line/remainder of song with video
   begin
     StopVideoPreview;
     AudioPlayback.Stop;
@@ -1137,11 +1137,11 @@ begin
       Notes[CurrentNote[CurrentTrack]].Color := 1;
       CurrentNote[CurrentTrack] := 0;
       AudioPlayback.Position := GetTimeFromBeat(Notes[0].StartBeat);
-      PlayStopTime := ifthen(SDL_ModState = KMOD_LALT,
+      PlayStopTime := ifthen(SDL_ModState = SDL_KMOD_LALT,
                             GetTimeFromBeat(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].High].EndBeat),
                             GetTimeFromBeat(Notes[High(Notes)].EndBeat));
     end;
-    if (SDL_ModState = KMOD_LALT) then
+    if (SDL_ModState = SDL_KMOD_LALT) then
     begin
       {$IFDEF UseMIDIPort}
       PlaySentenceMidi := true;
@@ -1163,7 +1163,7 @@ end;
 procedure TScreenEditSub.HandlePaste(SDL_ModState: word);
 begin
   // paste notes + text (enforce length of src line)
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CopyToUndo;
     CopySentence(CopySrc.track, CopySrc.line, CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine, true, true, true);
@@ -1171,7 +1171,7 @@ begin
   end;
 
   // paste text only (use minimum of src and dst length)
-  if SDL_ModState = KMOD_LCTRL + KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     CopySentence(CopySrc.track, CopySrc.line, CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine, true, false, false);
@@ -1179,7 +1179,7 @@ begin
   end;
 
   // paste notes only (use minimum of src and dst length)
-  if SDL_ModState = KMOD_LCTRL + KMOD_LALT then
+  if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LALT then
   begin
     CopyToUndo;
     CopySentence(CopySrc.track, CopySrc.line, CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine, false, true, false);
@@ -1187,7 +1187,7 @@ begin
   end;
 
   // paste notes + text (use minimum of src and dst length)
-  if SDL_ModState = KMOD_LCTRL + KMOD_LSHIFT + KMOD_LALT then
+  if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT + SDL_KMOD_LALT then
   begin
     CopyToUndo;
     CopySentence(CopySrc.track, CopySrc.line, CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine, true, true, false);
@@ -1233,7 +1233,7 @@ begin
     end;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_PLAY_SENTENCE_AUDIO');
   end
-  else if SDL_ModState = KMOD_LSHIFT then
+  else if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := 1;
     CurrentNote[CurrentTrack] := 0;
@@ -1247,7 +1247,7 @@ begin
     LastClick := -100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_PLAY_SENTENCE_MIDI');
   end
-  else if SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL then
+  else if SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL then
   begin
     CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := 1;
     CurrentNote[CurrentTrack] := 0;
@@ -1328,7 +1328,7 @@ end;
 procedure TScreenEditSub.Undo(SDL_ModState: word);
 // undo
 begin
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
       CopyFromUndo;
       GoldenRec.KillAll;
@@ -1378,12 +1378,12 @@ begin
     CurrentSong.BPM := Round((CurrentSong.BPM * 5) + 1) / 5; // (1/20)
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_INCREASED_BY') + ' 0.05';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.BPM := CurrentSong.BPM + 4; // (1/1)
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_INCREASED_BY') + ' 1.0';
   end;
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CurrentSong.BPM := Round((CurrentSong.BPM * 25) + 1) / 25; // (1/100)
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_INCREASED_BY') + ' 0.01';
@@ -1400,12 +1400,12 @@ begin
     CurrentSong.BPM := Round((CurrentSong.BPM * 5) - 1) / 5;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_DECREASED_BY') + ' 0.05';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.BPM := CurrentSong.BPM - 4;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_DECREASED_BY') + ' 1.0';
   end;
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CurrentSong.BPM := Round((CurrentSong.BPM * 25) - 1) / 25;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_BPM_DECREASED_BY') + ' 0.01';
@@ -1433,28 +1433,28 @@ begin
 
   for LineCount := 0 to NumLines - 1 do
   begin
-    if (SDL_ModState = KMOD_LCTRL) then
+    if (SDL_ModState = SDL_KMOD_LCTRL) then
     begin
       CopyToUndo;
       // paste notes + text (use src length, ignore dst length)
       CopySentence(CopySrc.track, CopySrc.line + LineCount, DstTrack, DstLine + LineCount, true, true, true);
       Text[TextInfo].Text := Format(Language.Translate('EDIT_INFO_PASTE_SENTENCE_N'), [NumLines]);
     end;
-    if SDL_ModState = KMOD_LCTRL + KMOD_LSHIFT then
+    if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT then
     begin
       CopyToUndo;
       // paste text only (use minimum of src and dst length)
       CopySentence(CopySrc.track, CopySrc.line + LineCount, DstTrack, DstLine + LineCount, true, false, false);
       Text[TextInfo].Text := Format(Language.Translate('EDIT_INFO_PASTE_TEXT_N'), [NumLines]);
     end;
-    if SDL_ModState = KMOD_LCTRL + KMOD_LALT then
+    if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LALT then
     begin
       CopyToUndo;
       // paste notes only (use minimum of src and dst length)
       CopySentence(CopySrc.track, CopySrc.line + LineCount, DstTrack, DstLine + LineCount, false, true, false);
       Text[TextInfo].Text := Format(Language.Translate('EDIT_INFO_PASTE_NOTES_N'), [NumLines]);
     end;
-    if SDL_ModState = KMOD_LCTRL + KMOD_LSHIFT + KMOD_LALT then
+    if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT + SDL_KMOD_LALT then
     begin
       CopyToUndo;
       // paste notes + text (use minimum of src and dst length)
@@ -1466,7 +1466,7 @@ begin
   ShowInteractiveBackground;
 
   // does this insert additional 4 lines before the current line?
-  {if SDL_ModState = KMOD_LCTRL + KMOD_LSHIFT + KMOD_LALT then
+  {if SDL_ModState = SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT + SDL_KMOD_LALT then
   begin
     CopyToUndo;
     CopySentences(CopySrc.track, CopySrc.line, CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine, 4);
@@ -1485,12 +1485,12 @@ begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) - 1) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_DECREASED_BY') + ' 0.01';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) - 10) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_DECREASED_BY') + ' 0.1';
   end;
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) - 100) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_DECREASED_BY') + ' 1.0';
@@ -1507,12 +1507,12 @@ begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) + 1) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_INCREASED_BY') + ' 0.01 s';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) + 10) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_INCREASED_BY') + ' 0.1 s';
   end;
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CurrentSong.VideoGAP := (round(CurrentSong.VideoGAP*100) + 100) / 100;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_VIDEOGAP_INCREASED_BY') + ' 1.0 s';
@@ -1529,7 +1529,7 @@ begin
     CurrentSong.GAP := CurrentSong.GAP - 10;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_GAP_DECREASED_BY') + ' 10 ms';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.GAP := CurrentSong.GAP - 1000;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_GAP_DECREASED_BY') + ' 1000 ms';
@@ -1546,7 +1546,7 @@ begin
     CurrentSong.GAP := CurrentSong.GAP + 10;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_GAP_INCREASED_BY') + ' 10 ms';
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CurrentSong.GAP := CurrentSong.GAP + 1000;
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_GAP_INCREASED_BY') + ' 1000 ms';
@@ -1563,7 +1563,7 @@ begin
     ChangeWholeTone(1);
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_ALL_TONES_INCREASED_BY_SEMITONE');
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     ChangeWholeTone(12);
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_ALL_TONES_INCREASED_BY_OCTAVE');
@@ -1582,7 +1582,7 @@ begin
     ChangeWholeTone(-1);
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_ALL_TONES_DECREASED_BY_SEMITONE');
   end;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     ChangeWholeTone(-12);
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_ALL_TONES_DECREASED_BY_OCTAVE');
@@ -1607,7 +1607,7 @@ begin
     GoldenRec.KillAll;
   end;
 
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     // Join current with subsequent sentence
     if CurrentSong.Tracks[CurrentTrack].CurrentLine < CurrentSong.Tracks[CurrentTrack].High then
@@ -1618,7 +1618,7 @@ begin
     GoldenRec.KillAll;
   end;
 
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     // divide note
     DivideNote(false);
@@ -1666,7 +1666,7 @@ end;
       // SDLK_SPACE: PlayNote
 procedure TScreenEditSub.PlayNote(SDL_ModState: word);
 begin
-  if (SDL_ModState = 0) or (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  if (SDL_ModState = 0) or (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL) then
   begin
     // Play current note
     PlaySentenceMidi := false; // stop midi
@@ -1687,7 +1687,7 @@ begin
     Text[TextInfo].Text := Language.Translate('EDIT_INFO_PLAY_NOTE_AUDIO');
   end;
 
-  if (SDL_ModState = KMOD_LSHIFT) or (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  if (SDL_ModState = SDL_KMOD_LSHIFT) or (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL) then
   begin
     // Play Midi
     PlaySentenceMidi := false;
@@ -2038,7 +2038,7 @@ end;
       // SDLK_DELETE: DeleteNotes
 procedure TScreenEditSub.DeleteNotes(SDL_ModState: word);
 begin
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     // deletes current note
     CopyToUndo;
@@ -2048,7 +2048,7 @@ begin
     ShowInteractiveBackground;
   end;
 
-  if (SDL_ModState = KMOD_LCTRL or KMOD_LSHIFT) then
+  if (SDL_ModState = SDL_KMOD_LCTRL or SDL_KMOD_LSHIFT) then
   begin
     // deletes current sentence
     CopyToUndo;
@@ -2092,7 +2092,7 @@ begin
   end;
 
   // ctrl + right
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CopyToUndo;
     if CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Duration > 1 then
@@ -2109,7 +2109,7 @@ begin
   end;
 
   // shift + right
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     Inc(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].StartBeat);
@@ -2124,7 +2124,7 @@ begin
   end;
 
   // alt + right
-  if SDL_ModState = KMOD_LALT then
+  if SDL_ModState = SDL_KMOD_LALT then
   begin
     CopyToUndo;
     Inc(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Duration);
@@ -2137,7 +2137,7 @@ begin
   end;
 
   // alt + ctrl + shift + right = move all from cursor to right
-  if SDL_ModState = KMOD_LALT + KMOD_LCTRL + KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LALT + SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     MoveAllToEnd(1);
@@ -2169,7 +2169,7 @@ begin
   end;
 
   // ctrl + left
-  if SDL_ModState = KMOD_LCTRL then
+  if SDL_ModState = SDL_KMOD_LCTRL then
   begin
     CopyToUndo;
     Dec(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].StartBeat);
@@ -2181,7 +2181,7 @@ begin
   end;
 
   // shift + left
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     Dec(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].StartBeat);
@@ -2199,7 +2199,7 @@ begin
   end;
 
   // alt + left
-  if SDL_ModState = KMOD_LALT then
+  if SDL_ModState = SDL_KMOD_LALT then
   begin
     CopyToUndo;
     if CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Duration > 1 then
@@ -2215,7 +2215,7 @@ begin
   end;
 
   // alt + ctrl + shift + right = move all from cursor to left
-  if SDL_ModState = KMOD_LALT + KMOD_LCTRL + KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LALT + SDL_KMOD_LCTRL + SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     MoveAllToEnd(-1);
@@ -2237,7 +2237,7 @@ begin
   end;
 
   // decrease tone
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     TransposeNote(-1);
@@ -2246,7 +2246,7 @@ begin
   end;
 
   // switch to second track, if possible
-  if ((SDL_ModState = KMOD_LCTRL) or (SDL_ModState = KMOD_LALT)) and (CurrentSong.isDuet) then
+  if ((SDL_ModState = SDL_KMOD_LCTRL) or (SDL_ModState = SDL_KMOD_LALT)) and (CurrentSong.isDuet) then
   begin
     if (Length(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes) > 0) then
     begin
@@ -2260,7 +2260,7 @@ begin
   end;
 
   // copy line from first to second track
-  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL) then
   begin
     CopyToUndo;
     if (DuetCopyLine) then
@@ -2270,7 +2270,7 @@ begin
   end;
 
   // move line from first to second track
-  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
+  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL or SDL_KMOD_LALT) then
   begin
     CopyToUndo;
     if (DuetMoveLine) then
@@ -2294,7 +2294,7 @@ begin
   end;
 
   // increase tone
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     CopyToUndo;
     TransposeNote(1);
@@ -2303,7 +2303,7 @@ begin
   end;
 
   // switch to first track, if possible
-  if ((SDL_ModState = KMOD_LCTRL) or (SDL_ModState = KMOD_LALT)) and (CurrentSong.isDuet) then
+  if ((SDL_ModState = SDL_KMOD_LCTRL) or (SDL_ModState = SDL_KMOD_LALT)) and (CurrentSong.isDuet) then
   begin
     if (Length(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes) > 0) then
     begin
@@ -2317,7 +2317,7 @@ begin
   end;
 
   // copy line from second to first track
-  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL) then
   begin
     CopyToUndo;
     if (DuetCopyLine) then
@@ -2327,7 +2327,7 @@ begin
   end;
 
   // move line from second to first track
-  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
+  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = SDL_KMOD_LSHIFT or SDL_KMOD_LCTRL or SDL_KMOD_LALT) then
   begin
     CopyToUndo;
     if (DuetMoveLine) then
@@ -2346,8 +2346,8 @@ begin
   // used when in Text Edit Mode
   Result := true;
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT {+ KMOD_CAPS});
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT {+ SDL_KMOD_CAPS});
 
   if (PressedDown) then
   begin
@@ -2650,7 +2650,7 @@ begin
       SDLK_SLASH, SDLK_KP_DIVIDE:
         begin
           CopyToUndo;
-          if SDL_ModState = KMOD_LCTRL then
+          if SDL_ModState = SDL_KMOD_LCTRL then
           begin
             // divide note
             DivideNote(false);
@@ -2676,8 +2676,8 @@ begin
   // used when in Text Edit Mode
   Result := true;
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT {+ KMOD_CAPS});
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT {+ SDL_KMOD_CAPS});
 
   if (PressedDown) then
   begin
@@ -2824,11 +2824,11 @@ begin
   // used when in Piano Edit Mode
   Result := true;
   NewNote := -1000;
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT {+ KMOD_CAPS});
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT {+ SDL_KMOD_CAPS});
 
   Shift := 0;
-  if SDL_ModState = KMOD_LSHIFT then
+  if SDL_ModState = SDL_KMOD_LSHIFT then
   begin
     Shift := 12;
   end;

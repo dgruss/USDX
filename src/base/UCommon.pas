@@ -1,4 +1,4 @@
-﻿{* UltraStar Deluxe - Karaoke Game
+{* UltraStar Deluxe - Karaoke Game
  *
  * UltraStar Deluxe is the legal property of its developers, whose names
  * are too numerous to list here. Please refer to the COPYRIGHT
@@ -136,7 +136,7 @@ uses
   {$IFDEF Delphi}
   Dialogs,
   {$ENDIF}
-  sdl2,
+  SDL3,
   UFilesystem,
   {$IFNDEF MSWINDOWS}
   UGraphic,

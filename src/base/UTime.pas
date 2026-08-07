@@ -78,7 +78,7 @@ var
 implementation
 
 uses
-  sdl2,
+  SDL3,
   UCommon;
   
 const

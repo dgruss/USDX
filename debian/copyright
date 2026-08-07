@@ -6,7 +6,7 @@ Files: *
 Copyright: UltraStar Deluxe Developers see https://github.com/UltraStar-Deluxe/USDX
 License: GPL-2.0+
 
-Files: src/lib/SDL2/* src/lib/dglOpenGL/*
+Files: src/lib/SDL3/* src/lib/dglOpenGL/*
 Copyright: see https://github.com/UltraStar-Deluxe/USDX
 License: MPL-2.0
 

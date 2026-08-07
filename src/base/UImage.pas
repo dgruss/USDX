@@ -34,7 +34,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   UPath;
 
 {$DEFINE HaveBMP}
@@ -97,29 +97,29 @@ uses
     jdatadst, jcapimin, jcapistd,
     {$ENDIF}
   {$ENDIF}
-  SDL2_image,
+  SDL3_image,
   UCommon,
   ULog;
 
-function IsRGBSurface(pixelFmt: PSDL_PixelFormat): boolean;
+function IsRGBSurface(pixelFmt: PSDL_PixelFormatDetails): boolean;
 begin
-  Result := (pixelFmt.BitsPerPixel = 24) and
+  Result := (pixelFmt.bits_per_pixel = 24) and
             (pixelFmt.RMask = $0000FF)   and
             (pixelFmt.GMask = $00FF00)   and
             (pixelFmt.BMask = $FF0000);
 end;
 
-function IsBGRSurface(pixelFmt: PSDL_PixelFormat): boolean;
+function IsBGRSurface(pixelFmt: PSDL_PixelFormatDetails): boolean;
 begin
-  Result := (pixelFmt.BitsPerPixel = 24) and
+  Result := (pixelFmt.bits_per_pixel = 24) and
             (pixelFmt.BMask = $0000FF)   and
             (pixelFmt.GMask = $00FF00)   and
             (pixelFmt.RMask = $FF0000);
 end;
 
-function IsBGRASurface(pixelFmt: PSDL_PixelFormat): boolean;
+function IsBGRASurface(pixelFmt: PSDL_PixelFormatDetails): boolean;
 begin
-  Result := (pixelFmt.BitsPerPixel = 32) and
+  Result := (pixelFmt.bits_per_pixel = 32) and
             (pixelFmt.BMask = $000000FF) and
             (pixelFmt.GMask = $0000FF00) and
             (pixelFmt.RMask = $00FF0000) and
@@ -130,9 +130,9 @@ end;
 // sets converted to true if the surface needed to be converted
 function ConvertToBGR_BGRASurface(Surface: PSDL_Surface; out Converted: boolean): PSDL_Surface;
 var
-  pixelFmt: PSDL_PixelFormat;
+  pixelFmt: PSDL_PixelFormatDetails;
 begin
-  pixelFmt := Surface.format;
+  pixelFmt := SDL_GetPixelFormatDetails(Surface^.format);
   if (IsBGRSurface(pixelFmt) or IsBGRASurface(pixelFmt)) then
   begin
     Converted := false;
@@ -142,9 +142,9 @@ begin
   begin
     // invalid format -> needs conversion
     if (pixelFmt.AMask <> 0) then
-      Result := SDL_ConvertSurfaceFormat(Surface, SDL_PIXELFORMAT_BGRA8888, 0)
+      Result := SDL_ConvertSurface(Surface, SDL_PIXELFORMAT_BGRA8888)
     else
-      Result := SDL_ConvertSurfaceFormat(Surface, SDL_PIXELFORMAT_BGR24, 0);
+      Result := SDL_ConvertSurface(Surface, SDL_PIXELFORMAT_BGR24);
     Converted := true;
   end;
 end;
@@ -251,7 +251,7 @@ begin
   Surface := ConvertToBGR_BGRASurface(Surface, Converted);
 
   // aligned (4-byte) row-size in bytes
-  RowSize := ((Surface.w * Surface.format.BytesPerPixel + 3) div 4) * 4;
+  RowSize := ((Surface.w * SDL_GetPixelFormatDetails(Surface^.format)^.bytes_per_pixel + 3) div 4) * 4;
 
   // initialize bitmap info
   FillChar(FileInfo, SizeOf(BITMAPINFOHEADER), 0);
@@ -261,7 +261,7 @@ begin
     biWidth := Surface.w;
     biHeight := Surface.h;
     biPlanes := 1;
-    biBitCount := Surface^.format^.BitsPerPixel;
+    biBitCount := SDL_GetPixelFormatDetails(Surface^.format)^.bits_per_pixel;
     biCompression := BI_RGB;
     biSizeImage := RowSize * Surface.h;
   end;
@@ -311,7 +311,7 @@ begin
   end;
 
   if (Converted) then
-    SDL_FreeSurface(Surface);
+    SDL_DestroySurface(Surface);
 
   // close file
   bmpFile.Free;
@@ -345,11 +345,11 @@ begin
 
   {$IFDEF Delphi}
     // only 24bit (BGR) data is supported, so convert to it
-    if (IsBGRSurface(Surface.format)) then
+    if (IsBGRSurface(SDL_GetPixelFormatDetails(Surface^.format))) then
       converted := false
     else
     begin
-      Surface := SDL_ConvertSurface(Surface, @PixelFmt_BGR, SDL_SWSURFACE);
+      Surface := SDL_ConvertSurface(Surface, SDL_PIXELFORMAT_BGR24);
       converted := true;
     end;
 
@@ -428,11 +428,11 @@ begin
     // based on example.pas in FPC's packages/base/pasjpeg directory
 
     // only 24bit (RGB) data is supported, so convert to it
-    if (IsRGBSurface(Surface.format)) then
+    if (IsRGBSurface(SDL_GetPixelFormatDetails(Surface^.format))) then
       converted := false
     else
     begin
-      Surface := SDL_ConvertSurfaceFormat(Surface, SDL_PIXELFORMAT_RGB24, SDL_SWSURFACE);
+      Surface := SDL_ConvertSurface(Surface, SDL_PIXELFORMAT_RGB24);
       converted := true;
     end;
 
@@ -491,7 +491,7 @@ begin
   {$ENDIF}
 
   if (converted) then
-    SDL_FreeSurface(Surface);
+    SDL_DestroySurface(Surface);
 
   Result := true;
 end;
@@ -521,7 +521,7 @@ begin
 
   // load from file
   try
-    Result := IMG_Load(PChar(FilenameCaseAdj.ToUTF8())); //SDL2 uses wants UTF-8 strings according to doocumentation
+    Result := IMG_Load(PChar(FilenameCaseAdj.ToUTF8())); // SDL expects UTF-8 paths.
     // Note: TBinaryFileStream is freed by SDLStream. SDLStream by IMG_Load_RW().
   except
     Log.LogError('Could not load from file "' + FilenameCaseAdj.ToNative + '"', 'LoadImage');
@@ -533,9 +533,9 @@ end;
  * Image manipulation
  *******************************************************)
 
-function GetSwscalePixelFormat(PixelFmt: PSDL_PixelFormat; out SwsPixelFmt: TAVPixelFormat): boolean;
+function GetSwscalePixelFormat(PixelFmt: TSDL_PixelFormat; out SwsPixelFmt: TAVPixelFormat): boolean;
 begin
-  case PixelFmt.format of
+  case PixelFmt of
     SDL_PIXELFORMAT_RGB24:
     begin
       SwsPixelFmt := AV_PIX_FMT_RGB24;
@@ -570,10 +570,7 @@ begin
   if not GetSwscalePixelFormat(ImgSurface^.format, SwsPixelFmt) then
     Exit;
 
-  NewSurface := SDL_CreateRGBSurface(
-    SDL_SWSURFACE, Width, Height, ImgSurface^.format^.BitsPerPixel,
-    ImgSurface^.format^.RMask, ImgSurface^.format^.GMask,
-    ImgSurface^.format^.BMask, ImgSurface^.format^.AMask);
+  NewSurface := SDL_CreateSurface(Width, Height, ImgSurface^.format);
   if (NewSurface = nil) then
     Exit;
 
@@ -583,7 +580,7 @@ begin
     SWS_LANCZOS, nil, nil, nil);
   if (SwsContext = nil) then
   begin
-    SDL_FreeSurface(NewSurface);
+    SDL_DestroySurface(NewSurface);
     Exit;
   end;
 
@@ -591,8 +588,8 @@ begin
   DstLocked := false;
   ScaledHeight := 0;
   try
-    SrcLocked := SDL_LockSurface(ImgSurface) = 0;
-    DstLocked := SDL_LockSurface(NewSurface) = 0;
+    SrcLocked := SDL_LockSurface(ImgSurface);
+    DstLocked := SDL_LockSurface(NewSurface);
     if SrcLocked and DstLocked then
     begin
       SrcData := pcuint8(ImgSurface^.pixels);
@@ -613,31 +610,29 @@ begin
 
   if ScaledHeight = integer(Height) then
   begin
-    SDL_FreeSurface(ImgSurface);
+    SDL_DestroySurface(ImgSurface);
     ImgSurface := NewSurface;
   end
   else
-    SDL_FreeSurface(NewSurface);
+    SDL_DestroySurface(NewSurface);
 end;
 
 procedure FitImage(var ImgSurface: PSDL_Surface; Width, Height: cardinal);
 var
   TempSurface: PSDL_Surface;
-  ImgFmt: PSDL_PixelFormat;
+  ImgFmt: TSDL_PixelFormat;
 begin
   TempSurface := ImgSurface;
 
   // create a new surface with given width and height
   ImgFmt := TempSurface^.format;
-  ImgSurface := SDL_CreateRGBSurface(
-    SDL_SWSURFACE, Width, Height, ImgFmt^.BitsPerPixel,
-    ImgFmt^.RMask, ImgFmt^.GMask, ImgFmt^.BMask, ImgFmt^.AMask);
+  ImgSurface := SDL_CreateSurface(Width, Height, ImgFmt);
 
   // copy image from temp- to new surface
   SDL_SetSurfaceBlendMode(TempSurface, SDL_BLENDMODE_NONE);
   SDL_BlitSurface(TempSurface, nil, ImgSurface, nil);
 
-  SDL_FreeSurface(TempSurface);
+  SDL_DestroySurface(TempSurface);
 end;
 
 procedure ColorizeImage(ImgSurface: PSDL_Surface; NewColor: longword);
@@ -713,10 +708,12 @@ var
   f, p, q, t: longword;
   GreyReal: real;
   Grey: byte;
+  BytesPerPixel: byte;
 begin
 
   SDL_LockSurface(ImgSurface);
   Pixel := ImgSurface^.Pixels;
+  BytesPerPixel := SDL_GetPixelFormatDetails(ImgSurface^.format)^.bytes_per_pixel;
 
   if not assigned(Pixel) then
   begin
@@ -730,10 +727,10 @@ begin
   // additional safeguard will show,
   // whether something went wrong up to here.
 
-  if ImgSurface^.format.BytesPerPixel <> 4 then
+  if BytesPerPixel <> 4 then
   begin
     Log.LogError ('ColorizeImage: The pixel size should be 4, but it is '
-                   + IntToStr(ImgSurface^.format.BytesPerPixel));
+                   + IntToStr(BytesPerPixel));
   end;
 
   // Check whether the new color is white, grey or black, 
@@ -759,7 +756,7 @@ begin
       PixelColors[1] := Grey;
       PixelColors[2] := Grey;
       //       PixelColors[3] is alpha and remains untouched
-      Inc(Pixel, ImgSurface^.format.BytesPerPixel);
+      Inc(Pixel, BytesPerPixel);
     end;
     SDL_UnlockSurface(ImgSurface);
     exit; // we are done with a greyscale image.
@@ -839,7 +836,7 @@ begin
       end;
     end;
 
-    Inc(Pixel, ImgSurface^.format.BytesPerPixel);
+    Inc(Pixel, BytesPerPixel);
   end;
   SDL_UnlockSurface(ImgSurface);
 end;

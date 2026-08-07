@@ -556,7 +556,7 @@
       <Filename Value="..\game\ultrastardx"/>
     </Target>
     <SearchPaths>
-      <OtherUnitFiles Value="base;lua;media;menu;screens;lib\OpenGL;lib\SDL2;lib\portaudio;lib\ffmpeg;lib\SQLite;lib\other;lib\openCV;webSDK\cURL\src;webSDK;webSDK\encrypt;$(LazarusDir)\fpc\3.0.0\source\packages\fcl-base\src;$(LazarusDir)\fpc\3.0.0\source\packages\fcl-registry\src;$(LazarusDir)\fpc\3.0.0\source\packages\winunits-base\src;$(LazarusDir)\components\lazutils"/>
+      <OtherUnitFiles Value="base;lua;media;menu;screens;lib\OpenGL;lib\SDL3;lib\portaudio;lib\ffmpeg;lib\SQLite;lib\other;lib\openCV;webSDK\cURL\src;webSDK;webSDK\encrypt;$(LazarusDir)\fpc\3.0.0\source\packages\fcl-base\src;$(LazarusDir)\fpc\3.0.0\source\packages\fcl-registry\src;$(LazarusDir)\fpc\3.0.0\source\packages\winunits-base\src;$(LazarusDir)\components\lazutils"/>
       <UnitOutputDirectory Value="..\build\fpc-$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

@@ -43,7 +43,7 @@ uses
   UMenu,
   UMusic,
   UThemes,
-  sdl2,
+  SDL3,
   UText;
 
 type

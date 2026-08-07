@@ -34,7 +34,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   UText,
   UConfig,
   UCommon,
@@ -538,7 +538,7 @@ var
   MaxTextureSize: integer;
 begin
   Log.LogStatus('SDL_Init', 'UGraphic.Initialize3D');
-  if ( SDL_InitSubSystem(SDL_INIT_VIDEO) = -1 ) then
+  if not SDL_InitSubSystem(SDL_INIT_VIDEO) then
   begin
     Log.LogCritical('SDL_Init Failed', 'UGraphic.Initialize3D');
   end;
@@ -556,7 +556,7 @@ begin
   if (Icon <> nil) then
   begin
     SDL_SetWindowIcon(Screen, Icon);
-    SDL_FreeSurface(Icon);
+    SDL_DestroySurface(Icon);
   end;
 
   SDL_SetWindowTitle(Screen, PChar(Title));
@@ -646,11 +646,12 @@ procedure InitializeScreen;
 var
   S:      string;
   W, H:   integer;
-  X, Y:   integer; // offset for re-positioning
   ActualW, ActualH: integer;
   Borderless, Fullscreen: boolean;
   Split: boolean;
   Disp: TSDL_DisplayMode;
+  DispPtr: PSDL_DisplayMode;
+  DisplayID: TSDL_DisplayID;
 
 label
   NoDoubledResolution;
@@ -713,22 +714,22 @@ NoDoubledResolution:
   begin
     Log.LogStatus('Set Video Mode...   Borderless fullscreen', 'SDL_SetVideoMode');
     CurrentWindowMode := Mode_Borderless;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              Ini.PositionX, Ini.PositionY, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN_DESKTOP or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
+    screen := SDL_CreateWindow('UltraStar Deluxe loading...', W, H,
+              SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
   end
   else if Fullscreen then
   begin
     Log.LogStatus('Set Video Mode...   Fullscreen', 'SDL_SetVideoMode');
     CurrentWindowMode := Mode_Fullscreen;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_FULLSCREEN or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
+    screen := SDL_CreateWindow('UltraStar Deluxe loading...', W, H,
+              SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
   end
   else
   begin
     Log.LogStatus('Set Video Mode...   Windowed', 'SDL_SetVideoMode');
     CurrentWindowMode := Mode_Windowed;
-    screen := SDL_CreateWindow('UltraStar Deluxe loading...',
-              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
+    screen := SDL_CreateWindow('UltraStar Deluxe loading...', W, H,
+              SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE or SDL_WINDOW_HIDDEN);
   end;
 
   if (screen = nil) then
@@ -737,12 +738,31 @@ NoDoubledResolution:
   end
   else
   begin
-    X:=0; Y:=0;
+    if Borderless then
+    begin
+      SDL_SetWindowFullscreenMode(screen, nil);
+      SDL_SetWindowFullscreen(screen, true);
+    end
+    else if Fullscreen then
+    begin
+      DisplayID := SDL_GetDisplayForWindow(screen);
+      if SDL_GetClosestFullscreenDisplayMode(DisplayID, W, H, 0, false, @Disp) then
+        SDL_SetWindowFullscreenMode(screen, @Disp);
+      SDL_SetWindowFullscreen(screen, true);
+    end
+    else if HasValidPosition then
+      SDL_SetWindowPosition(screen, Ini.PositionX, Ini.PositionY)
+    else
+      SDL_SetWindowPosition(screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+
     SDL_GetWindowSize(Screen, @ActualW, @ActualH);
 
     // check if created window has the desired size, otherwise override the config resolution value
-    if SDL_GetWindowDisplayMode(screen, @Disp) = 0 then
+    DisplayID := SDL_GetDisplayForWindow(screen);
+    DispPtr := SDL_GetCurrentDisplayMode(DisplayID);
+    if DispPtr <> nil then
     begin
+      Disp := DispPtr^;
       if (Disp.w < W) or (Disp.h < H) then
       begin
         Log.LogStatus(Format('Video resolution (%s) exceeded possible size (%s). Override stored config resolution!', [BuildResolutionString(W,H), BuildResolutionString(Disp.w, Disp.h)]), 'SDL_SetVideoMode');
@@ -754,18 +774,6 @@ NoDoubledResolution:
         Ini.SetResolution(Disp.w, Disp.h, false, true);
       end;
 
-      X := Disp.w - ActualW;
-      Y := Disp.h - ActualH;
-    end;
-
-    // if screen is out of the visisble desktop area, move it back
-    // this likely happens when creating a Window bigger than the possible desktop size
-    if (SDL_GetWindowFlags(screen) and SDL_WINDOW_FULLSCREEN = 0) and ((screen.x < 0) or (screen.Y < 0)) then
-    begin
-      // TODO: update SDL2
-      //SDL_GetWindowBordersSize(screen, w, h, nil, nil);
-      Log.LogStatus('Bad position for window. Re-position to (0,0)', 'SDL_SetVideoMode');
-      SDL_SetWindowPosition(screen, x, y+x);
     end;
   end;
 
@@ -787,15 +795,16 @@ procedure UpdateResolution();
   var
     Disp: TSDL_DisplayMode;
     Event: TSDL_event;
+    DisplayID: TSDL_DisplayID;
 begin
   if CurrentWindowMode = Mode_Borderless then Exit;
   case CurrentWindowMode of
     Mode_Fullscreen:
     begin
-      SDL_GetWindowDisplayMode(screen, @Disp); // TODO: verify if not failed
       Ini.GetResolutionFullscreen(Disp.W, Disp.H); // we use the fullscreen resolution without being doubled, true fullscreen uses non-multiplied one
-      SDL_SetWindowDisplayMode(screen, @Disp);
-      SDL_SetWindowSize(screen, Disp.W, Disp.H);
+      DisplayID := SDL_GetDisplayForWindow(screen);
+      if SDL_GetClosestFullscreenDisplayMode(DisplayID, Disp.W, Disp.H, 0, false, @Disp) then
+        SDL_SetWindowFullscreenMode(screen, @Disp);
     end;
     Mode_Windowed:
     begin
@@ -809,8 +818,8 @@ begin
       end;
 
       // simulate window re-drawing, otherwise the context will be different sized
-      Event.user.type_ := SDL_WINDOWEVENT;
-      Event.window.event := SDL_WINDOWEVENT_RESIZED;
+      Event := Default(TSDL_Event);
+      Event.window.type_ := SDL_EVENT_WINDOW_RESIZED;
       Event.window.data1 := Disp.W;
       Event.window.data2 := Disp.H;
       SDL_PushEvent(@Event);
@@ -832,6 +841,7 @@ end;
 procedure SetVideoMode(Mode: FullscreenModes);
   var
     Disp: TSDL_DisplayMode;
+    DisplayID: TSDL_DisplayID;
 begin
   if Mode = CurrentWindowMode then Exit;
   // SDL may dispatch resize events while changing the window flags. Set the
@@ -842,22 +852,22 @@ begin
   if Mode >= Mode_Fullscreen then
   begin
     Mode := Mode and not Mode_Borderless;
-    SDL_GetWindowDisplayMode(screen, @Disp);
-    SDL_SetWindowFullscreen(screen, SDL_WINDOW_FULLSCREEN);
-
     Ini.GetResolutionFullscreen(Disp.W, Disp.H);
-    SDL_SetWindowDisplayMode(screen, @Disp);
-    SDL_SetWindowSize(screen, Disp.W, Disp.H);
+    DisplayID := SDL_GetDisplayForWindow(screen);
+    if SDL_GetClosestFullscreenDisplayMode(DisplayID, Disp.W, Disp.H, 0, false, @Disp) then
+      SDL_SetWindowFullscreenMode(screen, @Disp);
+    SDL_SetWindowFullscreen(screen, true);
   end
   else if Mode = Mode_Borderless then
   begin
     // calls window-resize event which updates screen sizes
-    SDL_SetWindowFullscreen(screen, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    SDL_SetWindowFullscreenMode(screen, nil);
+    SDL_SetWindowFullscreen(screen, true);
   end
   else if Mode = Mode_Windowed then
   begin
     WindowModeDirty := true; // set window size dirty to restore old size after switching from fullscreen
-    SDL_SetWindowFullscreen(screen, 0); // calls window-resize event which updates screen sizes
+    SDL_SetWindowFullscreen(screen, false); // calls window-resize event which updates screen sizes
 
     ScreenW := LastW; ScreenH := LastH;
     if not HasValidSize then Ini.GetResolution(ScreenW, ScreenH);
@@ -989,7 +999,7 @@ procedure LoadScreens(Title: string);
         LoadingStatus := Copy(LoadingStatus, 1, MaxLoadingStatusLength - 3) + '...';
       ScreenLoading.SetStatus(LoadingStatus);
     end;
-    while SDL_PollEvent(@Event) <> 0 do
+    while SDL_PollEvent(@Event) do
       ;
   end;
 

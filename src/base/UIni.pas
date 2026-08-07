@@ -589,7 +589,7 @@ implementation
 
 uses
   StrUtils,
-  sdl2,
+  SDL3,
   UCommandLine,
   UDataBase,
   UDllManager,
@@ -1274,6 +1274,12 @@ end;
 
 procedure TIni.LoadScreenModes(IniFile: TCustomIniFile);
 
+type
+  TDisplayIDArray = array[0..0] of TSDL_DisplayID;
+  PDisplayIDArray = ^TDisplayIDArray;
+  TDisplayModeArray = array[0..0] of PSDL_DisplayMode;
+  PDisplayModeArray = ^TDisplayModeArray;
+
   // swap two strings
   procedure swap(var s1, s2: UTF8String);
   var
@@ -1285,7 +1291,11 @@ procedure TIni.LoadScreenModes(IniFile: TCustomIniFile);
   end;
 
 var
-  I, Success, DisplayIndex:     integer;
+  I, DisplayCount, ModeCount: integer;
+  DisplayID: TSDL_DisplayID;
+  Displays: PSDL_DisplayID;
+  DisplayModes: PPSDL_DisplayMode;
+  CurrentModePtr: PSDL_DisplayMode;
   CurrentMode, ModeIter, MaxMode: TSDL_DisplayMode;
   CurrentRes, ResString: string;
 begin
@@ -1339,27 +1349,30 @@ begin
   // Check if there are any modes available
 
   // retrieve currently used Video Display
-  DisplayIndex := -1;
+  DisplayID := 0;
   MaxMode.h := 0; MaxMode.w := 0;
   CurrentMode.h := -1; CurrentMode.w := -1;
-  for I := 0 to SDL_GetNumVideoDisplays() - 1 do
+  Displays := SDL_GetDisplays(@DisplayCount);
+  for I := 0 to DisplayCount - 1 do
   begin
-    Success := SDL_GetCurrentDisplayMode(I,  @CurrentMode);
-    if Success = 0 then
+    CurrentModePtr := SDL_GetCurrentDisplayMode(PDisplayIDArray(Displays)^[I]);
+    if CurrentModePtr <> nil then
     begin
-      DisplayIndex := I;
+      DisplayID := PDisplayIDArray(Displays)^[I];
+      CurrentMode := CurrentModePtr^;
       CurrentRes := BuildResolutionString(CurrentMode.w, CurrentMode.h);
       Break
     end;
   end;
+  SDL_free(Displays);
 
   // retrieve available display modes, store into separate array
-  if DisplayIndex >= 0 then
+  if DisplayID <> 0 then
   begin
-    for I := 0 to SDL_GetNumDisplayModes(DisplayIndex) - 1 do
+    DisplayModes := SDL_GetFullscreenDisplayModes(DisplayID, @ModeCount);
+    for I := 0 to ModeCount - 1 do
     begin
-      Success := SDL_GetDisplayMode(DisplayIndex, I, @ModeIter);
-      if Success <> 0 then continue;
+      ModeIter := PDisplayModeArray(DisplayModes)^[I]^;
 
       ResString := BuildResolutionString(ModeIter.w, ModeIter.h);
       if GetArrayIndex(IResolutionFullScreen, ResString) < 0 then
@@ -1368,12 +1381,13 @@ begin
         SetLength(IResolutionFullScreen, Length(IResolutionFullScreen) + 1);
         IResolutionFullScreen[High(IResolutionFullScreen)] := ResString;
 
-        if (ModeIter.w > MaxMode.w) or (ModeIter.h > ModeIter.h) then
+        if (ModeIter.w > MaxMode.w) or (ModeIter.h > MaxMode.h) then
         begin
           MaxMode := ModeIter;
         end;
       end;
     end;
+    SDL_free(DisplayModes);
   end;
 
   // if display modes are found, override fallback ones

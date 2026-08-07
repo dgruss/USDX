@@ -56,7 +56,7 @@ interface
 implementation
 
 uses
-  sdl2, // SDL redefines some base types -> include before SysUtils to ignore them
+  SDL3, // SDL redefines some base types -> include before SysUtils to ignore them
   Classes,
   Math,
   SysUtils,
@@ -88,19 +88,19 @@ type
       fErrorState: boolean; // error flag (locked by StateLock)
 
       fQuitRequest: boolean; // (locked by StateLock)
-      fParserIdleCond: PSDL_Cond;
+      fParserIdleCond: PSDL_Condition;
 
       // parser pause/resume data
       fParserLocked:            boolean;
       fParserPauseRequestCount: integer;
-      fParserUnlockedCond:      PSDL_Cond;
-      fParserResumeCond:        PSDL_Cond;
+      fParserUnlockedCond:      PSDL_Condition;
+      fParserResumeCond:        PSDL_Condition;
 
       fSeekRequest: boolean; // (locked by StateLock)
       fSeekFlags:   integer; // (locked by StateLock)
       fSeekPos:     double;    // stream position to seek for (in secs) (locked by StateLock)
       fSeekFlush:   boolean;   // true if the buffers should be flushed after seeking (locked by StateLock)
-      SeekFinishedCond: PSDL_Cond;
+      SeekFinishedCond: PSDL_Condition;
       fStartTime:   int64; // start time in PTS
 
       fLoop: boolean; // (locked by StateLock)
@@ -124,8 +124,8 @@ type
       // decoder pause/resume data
       fDecoderLocked:            boolean;
       fDecoderPauseRequestCount: integer;
-      fDecoderUnlockedCond:      PSDL_Cond;
-      fDecoderResumeCond:        PSDL_Cond;
+      fDecoderUnlockedCond:      PSDL_Condition;
+      fDecoderResumeCond:        PSDL_Condition;
 
       // state-vars for DecodeFrame (locked by DecoderLock)
       fAudioPaketSize:    integer;
@@ -215,12 +215,12 @@ begin
   inherited Create();
 
   fStateLock := SDL_CreateMutex();
-  fParserUnlockedCond := SDL_CreateCond();
-  fParserResumeCond := SDL_CreateCond();
-  fParserIdleCond := SDL_CreateCond();
-  SeekFinishedCond := SDL_CreateCond();
-  fDecoderUnlockedCond := SDL_CreateCond();
-  fDecoderResumeCond := SDL_CreateCond();
+  fParserUnlockedCond := SDL_CreateCondition();
+  fParserResumeCond := SDL_CreateCondition();
+  fParserIdleCond := SDL_CreateCondition();
+  SeekFinishedCond := SDL_CreateCondition();
+  fDecoderUnlockedCond := SDL_CreateCondition();
+  fDecoderResumeCond := SDL_CreateCondition();
   fAudioBufferFrame := av_frame_alloc();
 
   Reset();
@@ -257,12 +257,12 @@ begin
 
   SDL_DestroyMutex(fStateLock);
   fStateLock:=nil;
-  SDL_DestroyCond(fParserUnlockedCond);
-  SDL_DestroyCond(fParserResumeCond);
-  SDL_DestroyCond(fParserIdleCond);
-  SDL_DestroyCond(SeekFinishedCond);
-  SDL_DestroyCond(fDecoderUnlockedCond);
-  SDL_DestroyCond(fDecoderResumeCond);
+  SDL_DestroyCondition(fParserUnlockedCond);
+  SDL_DestroyCondition(fParserResumeCond);
+  SDL_DestroyCondition(fParserIdleCond);
+  SDL_DestroyCondition(SeekFinishedCond);
+  SDL_DestroyCondition(fDecoderUnlockedCond);
+  SDL_DestroyCondition(fDecoderResumeCond);
   av_frame_free(@fAudioBufferFrame);
 
   inherited;
@@ -476,7 +476,7 @@ begin
   // send quit request (to parse-thread etc)
   SDL_LockMutex(fStateLock);
   fQuitRequest := true;
-  SDL_CondBroadcast(fParserIdleCond);
+  SDL_BroadcastCondition(fParserIdleCond);
   SDL_UnlockMutex(fStateLock);
 
   // abort parse-thread
@@ -486,7 +486,7 @@ begin
     SDL_WaitThread(fParseThread, @ThreadResult);
     SDL_LockMutex(fStateLock);
     fParseThread := nil;
-    SDL_CondBroadcast(SeekFinishedCond);
+    SDL_BroadcastCondition(SeekFinishedCond);
     SDL_UnlockMutex(fStateLock);
   end;
 
@@ -616,7 +616,7 @@ begin
 
     // wait until seeking is done
     while ((fParseThread <> nil) and fSeekRequest) do
-      SDL_CondWait(SeekFinishedCond, fStateLock);
+      SDL_WaitCondition(SeekFinishedCond, fStateLock);
   end;
   SDL_UnlockMutex(fStateLock);
 end;
@@ -715,7 +715,7 @@ begin
   Result := true;
   Inc(fParserPauseRequestCount);
   while (fParserLocked) do
-    SDL_CondWait(fParserUnlockedCond, fStateLock);
+    SDL_WaitCondition(fParserUnlockedCond, fStateLock);
   if (fParseThread = nil) then
   begin
     Dec(fParserPauseRequestCount);
@@ -726,7 +726,7 @@ end;
 procedure TFFmpegDecodeStream.ResumeParser();
 begin
   Dec(fParserPauseRequestCount);
-  SDL_CondSignal(fParserResumeCond);
+  SDL_SignalCondition(fParserResumeCond);
 end;
 
 procedure TFFmpegDecodeStream.SetPositionIntern(Time: real; Flush: boolean);
@@ -749,7 +749,7 @@ begin
     fSeekRequest := true;
 
     // send a reuse signal in case the parser was stopped (e.g. because of an EOF)
-    SDL_CondSignal(fParserIdleCond);
+    SDL_SignalCondition(fParserIdleCond);
   finally
     ResumeDecoderUnlocked();
   end;
@@ -773,7 +773,7 @@ begin
   begin
     // wait for reuse or destruction of stream
     while (not (fSeekRequest or fQuitRequest)) do
-      SDL_CondWait(fParserIdleCond, fStateLock);
+      SDL_WaitCondition(fParserIdleCond, fStateLock);
   end;
   SDL_UnlockMutex(fStateLock);
 end;
@@ -810,7 +810,7 @@ var
   function LockParser(): boolean;
   begin
     while ((fParserPauseRequestCount > 0) and not fQuitRequest) do
-      SDL_CondWait(fParserResumeCond, fStateLock);
+      SDL_WaitCondition(fParserResumeCond, fStateLock);
     if (not fQuitRequest) then
       fParserLocked := true;
     Result := fParserLocked;
@@ -819,7 +819,7 @@ var
   procedure UnlockParser();
   begin
     fParserLocked := false;
-    SDL_CondBroadcast(fParserUnlockedCond);
+    SDL_BroadcastCondition(fParserUnlockedCond);
   end;
 
 begin
@@ -906,7 +906,7 @@ begin
           end;
 
           fSeekRequest := false;
-          SDL_CondBroadcast(SeekFinishedCond);
+          SDL_BroadcastCondition(SeekFinishedCond);
           SeekCheckPTS := true;
         finally
           ResumeDecoderUnlocked();
@@ -999,7 +999,7 @@ procedure TFFmpegDecodeStream.PauseDecoderUnlocked();
 begin
   Inc(fDecoderPauseRequestCount);
   while (fDecoderLocked) do
-    SDL_CondWait(fDecoderUnlockedCond, fStateLock);
+    SDL_WaitCondition(fDecoderUnlockedCond, fStateLock);
 end;
 
 procedure TFFmpegDecodeStream.PauseDecoder();
@@ -1012,7 +1012,7 @@ end;
 procedure TFFmpegDecodeStream.ResumeDecoderUnlocked();
 begin
   Dec(fDecoderPauseRequestCount);
-  SDL_CondSignal(fDecoderResumeCond);
+  SDL_SignalCondition(fDecoderResumeCond);
 end;
 
 procedure TFFmpegDecodeStream.ResumeDecoder();
@@ -1291,7 +1291,7 @@ var
   begin
     SDL_LockMutex(fStateLock);
     while (fDecoderPauseRequestCount > 0) do
-      SDL_CondWait(fDecoderResumeCond, fStateLock);
+      SDL_WaitCondition(fDecoderResumeCond, fStateLock);
     fDecoderLocked := true;
     SDL_UnlockMutex(fStateLock);
   end;
@@ -1300,7 +1300,7 @@ var
   begin
     SDL_LockMutex(fStateLock);
     fDecoderLocked := false;
-    SDL_CondBroadcast(fDecoderUnlockedCond);
+    SDL_BroadcastCondition(fDecoderUnlockedCond);
     SDL_UnlockMutex(fStateLock);
   end;
 

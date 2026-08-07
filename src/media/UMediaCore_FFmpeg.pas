@@ -36,7 +36,7 @@ interface
 uses
   Classes,
   ctypes,
-  sdl2,
+  SDL3,
   avcodec,
   avformat,
   avutil,
@@ -59,7 +59,7 @@ type
       LastListEntry:  PPacketList;
       PacketCount: integer;
       Mutex:     PSDL_Mutex;
-      Condition: PSDL_Cond;
+      Condition: PSDL_Condition;
       Size: integer;
       AbortRequest: boolean;
     public
@@ -489,7 +489,7 @@ begin
   Size := 0;
 
   Mutex := SDL_CreateMutex();
-  Condition := SDL_CreateCond();
+  Condition := SDL_CreateCondition();
 end;
 
 destructor TPacketQueue.Destroy();
@@ -497,7 +497,7 @@ begin
   Flush();
   SDL_DestroyMutex(Mutex);
   Mutex:=nil;
-  SDL_DestroyCond(Condition);
+  SDL_DestroyCondition(Condition);
   inherited;
 end;
 
@@ -507,7 +507,7 @@ begin
 
   AbortRequest := true;
 
-  SDL_CondBroadcast(Condition);
+  SDL_BroadcastCondition(Condition);
   SDL_UnlockMutex(Mutex);
 end;
 
@@ -558,7 +558,7 @@ begin
     Inc(PacketCount);
 
     Size := Size + CurrentListEntry^.pkt^.size;
-    SDL_CondSignal(Condition);
+    SDL_SignalCondition(Condition);
   finally
     SDL_UnlockMutex(Mutex);
   end;
@@ -655,7 +655,7 @@ begin
       begin
         // block until a new package arrives,
         // but do not wait till infinity to avoid deadlocks
-        if (SDL_CondWaitTimeout(Condition, Mutex, WAIT_TIMEOUT) = SDL_MUTEX_TIMEDOUT) then
+        if not SDL_WaitConditionTimeout(Condition, Mutex, WAIT_TIMEOUT) then
         begin
           Result := 0;
           Break;

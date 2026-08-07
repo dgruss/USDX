@@ -84,7 +84,7 @@ type
 implementation
 uses
   math,
-  sdl2,
+  SDL3,
   URenderer;
 
 constructor Tms_Equalizer.Create(Source: IAudioPlayback; mySkin: TThemeEqualizer);

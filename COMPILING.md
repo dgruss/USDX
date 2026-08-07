@@ -2,7 +2,7 @@
 [Free Pascal](http://freepascal.org/) 3.0.0 or newer is required to compile UltraStar Deluxe. If you had some older version of fpc installed before, make sure to remove everything of it correctly before trying to install Free Pascal (otherwise compiling will fail with various weird error messages). Also, using the newest version is suggested.
 If you want to help the project by coding patches, we suggest you to use the [Lazarus 1.6](http://www.lazarus-ide.org/) or newer integrated development environment.
 For linking and running the game, the following libraries are also required:
-- SDL2, SDL2_image
+- SDL3, SDL3_image
 - FFmpeg 4.0-8.0
 - SQLite 3
 - [BASS](http://www.un4seen.com/bass.html)
@@ -12,7 +12,7 @@ For linking and running the game, the following libraries are also required:
 - OpenCV if you want webcam support
 - projectM 4,x if you want audio visualisation support
 
-Prebuilt DLLs for SDL2, SDL2_image, FFmpeg, SQLite, PortAudio, and Lua can be found in the releases section of [our MXE fork](https://github.com/UltraStar-Deluxe/mxe). You can use the dldlls.py script to download the DLLs for the checked out code. The remaining DLLs needed for Windows builds are part of this repository.
+Prebuilt DLLs for FFmpeg, SQLite, PortAudio, and Lua can be found in the releases section of [our MXE fork](https://github.com/UltraStar-Deluxe/mxe). SDL3 and SDL3_image runtime DLLs are available from their official releases. You can use the dldlls.py script to download the other DLLs for the checked out code.
 
 ## Compiling using Lazarus
 1. Start Lazarus.
@@ -27,8 +27,8 @@ Prebuilt DLLs for SDL2, SDL2_image, FFmpeg, SQLite, PortAudio, and Lua can be fo
 ### Install prequisites
 #### Linux/BSD
 Required libraries:
-- Debian/Ubuntu: `git automake make gcc fpc libsdl2-image-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libsqlite3-dev libfreetype6-dev portaudio19-dev libportmidi-dev liblua5.3-dev libopencv-videoio-dev fonts-dejavu`
-- Fedora: `git automake make gcc fpc SDL2_image-devel ffmpeg-devel sqlite-devel freetype-devel portaudio-devel portmidi-devel lua-devel opencv-devel`
+- Debian/Ubuntu: `git automake make gcc fpc libsdl3-image-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libsqlite3-dev libfreetype6-dev portaudio19-dev libportmidi-dev liblua5.3-dev libopencv-videoio-dev fonts-dejavu`
+- Fedora: `git automake make gcc fpc SDL3_image-devel ffmpeg-devel sqlite-devel freetype-devel portaudio-devel portmidi-devel lua-devel opencv-devel`
 - Archlinux: see the dependencies in the [ultrastardx-git](https://aur.archlinux.org/packages/ultrastardx-git) AUR package
 
 Optional libraries:
@@ -39,7 +39,7 @@ Optional libraries:
 - Install Homebrew. Follow instructions from [brew.sh](http://brew.sh)
 - `brew install fpc` or get it from [freepascal.org](http://www.freepascal.org/down/i386/macosx.var)
 - `xcode-select --install`
-- `brew install sdl2 sdl2_image automake portaudio binutils sqlite freetype lua libtiff pkg-config ffmpeg opencv`
+- `brew install sdl3 sdl3_image automake portaudio binutils sqlite freetype lua libtiff pkg-config ffmpeg opencv`
 
 #### Windows using MSYS2
 - Install [MSYS2](https://www.msys2.org)

@@ -39,7 +39,7 @@ uses
   UMenu,
   UMusic,
   UNote,
-  sdl2,
+  SDL3,
   SysUtils,
   UThemes;
 

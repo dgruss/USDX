@@ -151,7 +151,7 @@ uses
   URenderer,
   UUnicodeUtils,
   Math,
-  sdl2,
+  SDL3,
   SysUtils,
   UText;
 
@@ -507,7 +507,7 @@ begin
         end;
       SDLK_T:
         begin
-          if ((SDL_GetModState() and KMOD_SHIFT) <> 0) then
+          if ((SDL_GetModState() and SDL_KMOD_SHIFT) <> 0) then
             Ini.ThresholdIndex := (Ini.ThresholdIndex + Length(IThresholdVals) - 1) mod Length(IThresholdVals)
           else
             Ini.ThresholdIndex := (Ini.ThresholdIndex + 1) mod Length(IThresholdVals);

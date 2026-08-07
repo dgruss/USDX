@@ -73,7 +73,7 @@ uses
   MidiOut,
   MidiCons,
   {$ENDIF}
-  SDL2;
+  SDL3;
 
 type
   TMidiNote = record
@@ -236,8 +236,8 @@ begin
         end;
     end;
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check special keys
     case PressedKey of
@@ -409,7 +409,7 @@ begin
 
       SDLK_TAB:
         begin
-          if (SDL_ModState = KMOD_LCTRL) then // toggle channels
+          if (SDL_ModState = SDL_KMOD_LCTRL) then // toggle channels
             begin
               if Length(Channels) > 0 then
               begin

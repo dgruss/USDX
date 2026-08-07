@@ -35,7 +35,7 @@ interface
 
 uses
   FreeType,
-  sdl2,
+  SDL3,
   Math,
   Classes,
   SysUtils,

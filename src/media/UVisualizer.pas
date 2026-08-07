@@ -34,7 +34,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   UGraphicClasses,
   math,
   SysUtils,
@@ -229,7 +229,7 @@ var
   EasterEgg: single;
   HardCutSensitivity: single;
   AspectCorrection: boolean;
-  Disp: TSDL_DisplayMode;
+  Disp: PSDL_DisplayMode;
 begin
   Result := false;
   IniFile := TIniFile.Create(ConfigPath.ToNative, [ifoWriteStringBoolean, ifoStripComments]);
@@ -254,9 +254,9 @@ begin
   MeshY := IniFile.ReadInteger('ProjectM', 'Mesh Y', 24);
   projectm_set_mesh_size(Handle, MeshX, MeshY);
 
-  SDL_GetWindowDisplayMode(screen, @Disp);
-  if (Disp.refresh_rate <> 0) then
-    projectm_set_fps(Handle, Disp.refresh_rate);
+  Disp := SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(screen));
+  if (Disp <> nil) and (Disp^.refresh_rate <> 0) then
+    projectm_set_fps(Handle, Round(Disp^.refresh_rate));
 
   self.ScreenW := UGraphic.ScreenW;
   self.ScreenH := UGraphic.ScreenH;

@@ -97,7 +97,7 @@ uses
   UFiles,
   ULanguage,
   Classes,
-  sdl2;
+  SDL3;
 
 //----------
 //Create - Construct Class then LoadList + Standard Language + Set Standard Implode Glues

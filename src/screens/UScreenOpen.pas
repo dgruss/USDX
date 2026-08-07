@@ -45,7 +45,7 @@ uses
   UThemes,
   UTime,
   Math,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type

@@ -164,7 +164,7 @@ implementation
 
 uses
   StrUtils,
-  SDL2,
+  SDL3,
   UCommandLine,
   UFiles,
   UGraphic,
@@ -188,7 +188,7 @@ begin
   if (LastLoadingEventPumpTicks <> 0) and (NowTicks - LastLoadingEventPumpTicks < LoadingEventPumpIntervalMs) then
     Exit;
 
-  while SDL_PollEvent(@Event) <> 0 do
+  while SDL_PollEvent(@Event) do
     ;
 
   LastLoadingEventPumpTicks := NowTicks;

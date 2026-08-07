@@ -52,7 +52,7 @@ uses
   UTime,
   UVideo,
   UWebcam,
-  sdl2,
+  SDL3,
   SysUtils,
   UText;
 
@@ -1330,8 +1330,8 @@ begin
     Exit;
   end;
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT +
-    KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT + KMOD_RALT);
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT +
+    SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT + SDL_KMOD_RALT);
 
   if (PressedDown) then
   begin // key down
@@ -1534,7 +1534,7 @@ begin
         SDLK_A:
         begin
           // change aspect ratio
-          if (SDL_ModState = KMOD_LSHIFT) then
+          if (SDL_ModState = SDL_KMOD_LSHIFT) then
           begin
             if (AspectCorrection = acoCrop) then
               AspectCorrection := acoLetterBox
@@ -1553,7 +1553,7 @@ begin
 
         SDLK_L:
         begin
-          if (SDL_ModState = KMOD_LCTRL) then
+          if (SDL_ModState = SDL_KMOD_LCTRL) then
           begin
             LastTick := SDL_GetTicks();
 
@@ -1576,7 +1576,7 @@ begin
         SDLK_S:
         begin
 
-          if (SongListVisible) and (SDL_ModState = KMOD_LCTRL) then
+          if (SongListVisible) and (SDL_ModState = SDL_KMOD_LCTRL) then
           begin
             ChangeOrderList();
             Exit;
@@ -1587,7 +1587,7 @@ begin
         // repeat songlist
         SDLK_X:
         begin
-          if (SDL_ModState = KMOD_LCTRL) then
+          if (SDL_ModState = SDL_KMOD_LCTRL) then
           begin
             LastTick := SDL_GetTicks();
 
@@ -1600,7 +1600,7 @@ begin
         SDLK_F:
         begin
 
-          if (SongListVisible) and (SDL_ModState = KMOD_LCTRL) then
+          if (SongListVisible) and (SDL_ModState = SDL_KMOD_LCTRL) then
           begin
             LastTick := SDL_GetTicks();
 
@@ -1633,7 +1633,7 @@ begin
         SDLK_R:
         begin
 
-          if (SongListVisible) and (SDL_ModState = KMOD_LCTRL) then
+          if (SongListVisible) and (SDL_ModState = SDL_KMOD_LCTRL) then
           begin
             RandomList();
           end;
@@ -1678,7 +1678,7 @@ begin
 
         SDLK_TAB:
         begin
-          if (SDL_ModState = KMOD_LCTRL) then // change visualization preset
+          if (SDL_ModState = SDL_KMOD_LCTRL) then // change visualization preset
           begin
             if fShowVisualization then
               fCurrentVideo.Position := now; // move to a random position
@@ -1766,7 +1766,7 @@ begin
           begin
             LastTick := SDL_GetTicks();
 
-            if (SDL_ModState = KMOD_LCTRL) and (ActualInteraction < High(JukeboxVisibleSongs)) then
+            if (SDL_ModState = SDL_KMOD_LCTRL) and (ActualInteraction < High(JukeboxVisibleSongs)) then
             begin
               Button[JukeboxSongListOrder].SetSelect(false);
               OrderMode := false;
@@ -1784,7 +1784,7 @@ begin
               end;
             end;
 
-            if not(SDL_ModState = KMOD_LSHIFT) and not(SDL_ModState = KMOD_LALT) and (ActualInteraction < High(JukeboxVisibleSongs)) then
+            if not(SDL_ModState = SDL_KMOD_LSHIFT) and not(SDL_ModState = SDL_KMOD_LALT) and (ActualInteraction < High(JukeboxVisibleSongs)) then
             begin
               ActualInteraction := ActualInteraction + 1;
 
@@ -1796,7 +1796,7 @@ begin
             end;
           end;
 
-          if not(SDL_ModState = KMOD_LALT) and not(SDL_ModState = KMOD_LSHIFT) and (not SongListVisible) then
+          if not(SDL_ModState = SDL_KMOD_LALT) and not(SDL_ModState = SDL_KMOD_LSHIFT) and (not SongListVisible) then
           begin
             SongListVisible := true;
             LastTick := SDL_GetTicks();
@@ -1809,7 +1809,7 @@ begin
           begin
             LastTick := SDL_GetTicks();
 
-            if (SDL_ModState = KMOD_LCTRL) and (ActualInteraction > 0) then
+            if (SDL_ModState = SDL_KMOD_LCTRL) and (ActualInteraction > 0) then
             begin
               Button[JukeboxSongListOrder].SetSelect(false);
               OrderMode := false;
@@ -1827,7 +1827,7 @@ begin
               end;
             end;
 
-            if not(SDL_ModState = KMOD_LSHIFT) and not(SDL_ModState = KMOD_LALT) then
+            if not(SDL_ModState = SDL_KMOD_LSHIFT) and not(SDL_ModState = SDL_KMOD_LALT) then
             begin
               ActualInteraction := ActualInteraction - 1;
 
@@ -1838,7 +1838,7 @@ begin
             end;
           end;
 
-          if not(SDL_ModState = KMOD_LALT) and not(SDL_ModState = KMOD_LSHIFT) and (not SongListVisible) then
+          if not(SDL_ModState = SDL_KMOD_LALT) and not(SDL_ModState = SDL_KMOD_LSHIFT) and (not SongListVisible) then
           begin
             SongListVisible := true;
             LastTick := SDL_GetTicks();

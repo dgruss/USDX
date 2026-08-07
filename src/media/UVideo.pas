@@ -49,7 +49,7 @@ uses
   SysUtils,
   Math,
   ctypes,
-  sdl2,
+  SDL3,
   avcodec,
   avformat,
   avutil,

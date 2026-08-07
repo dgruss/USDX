@@ -550,7 +550,6 @@
       <Filename Value="../game/ultrastardx"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="lib/JEDI-SDL/SDL/Pas/"/>
       <OtherUnitFiles Value="base/;menu/;screens/;media/;lib/;lua/"/>
       <UnitOutputDirectory Value="../build/fpc-$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>

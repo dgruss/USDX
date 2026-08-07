@@ -235,7 +235,7 @@ implementation
 uses
   SysUtils,
   Math,
-  sdl2,
+  SDL3,
   UText,
   ULog,
   UNote,

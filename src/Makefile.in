@@ -69,7 +69,7 @@ PCUNIT_DIR   := $(USDX_BUILD_DIR)/fpc-$(PPROCESSOR)-$(PPLATFORM)
 PCUNIT_FLAGS := -FU$(PCUNIT_DIR)
 
 # Directories added to the includes path
-PINC_FLAGS := -Fi$(USDX_LIB_DIR)/JEDI-SDL/SDL/Pas
+PINC_FLAGS :=
 
 ##
 # PFLAGS

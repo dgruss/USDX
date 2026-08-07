@@ -44,7 +44,7 @@ uses
   UThemes,
   UWebSDK,
   math,
-  sdl2,
+  SDL3,
   SysUtils;
 
 const

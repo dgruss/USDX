@@ -34,7 +34,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   SQLite3,
   SQLiteTable3,
   SysUtils,
@@ -319,7 +319,7 @@ begin
   if not assigned(Thumbnail^.pixels) then
   begin
     Log.LogError('Failed to lock surface', 'TAvatarDatabase.AddAvatar');
-    SDL_FreeSurface(Thumbnail);
+    SDL_DestroySurface(Thumbnail);
     Exit;
   end;
 
@@ -355,7 +355,7 @@ begin
 
   DB.Commit();
   AvatarData.Free;
-  SDL_FreeSurface(Thumbnail);
+  SDL_DestroySurface(Thumbnail);
 end;
 
 function TAvatarDatabase.LoadAvatar(AvatarID: int64): TTexture;

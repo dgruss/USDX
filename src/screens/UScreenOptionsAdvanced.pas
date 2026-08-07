@@ -40,7 +40,7 @@ uses
   UMenu,
   UMusic,
   UThemes,
-  sdl2;
+  SDL3;
 
 type
   TScreenOptionsAdvanced = class(TOptionsMenu)

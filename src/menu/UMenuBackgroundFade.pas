@@ -65,7 +65,7 @@ const
 
 implementation
 uses
-  sdl2,
+  SDL3,
   USkins,
   UGraphic;
 

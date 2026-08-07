@@ -36,7 +36,7 @@ interface
 uses
   UMenu,
   UThemes,
-  sdl2;
+  SDL3;
 
 type
   TScreenEdit = class(TMenu)

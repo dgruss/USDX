@@ -37,7 +37,7 @@ uses
   Classes,
   URenderer
   {$IFDEF UseOpenCVWrapper},
-  sdl2,
+  SDL3,
   opencv_highgui,
   opencv_core,
   opencv_imgproc,
@@ -55,7 +55,7 @@ type
       LastFrame:     PIplImage;
       CurrentFrame:  PIplImage;
       Mutex:         PSDL_Mutex;
-      StopCond:      PSDL_Cond;
+      StopCond:      PSDL_Condition;
       CaptureThread: PSDL_Thread;
       BGR2YUV:       PCvMat;
       YUV2BGR:       PCvMat;
@@ -110,7 +110,7 @@ constructor TWebcam.Create;
 begin
   inherited;
   Mutex := SDL_CreateMutex();
-  StopCond := SDL_CreateCond();
+  StopCond := SDL_CreateCondition();
   IsEnabled := false;
   if @cvCreateMat <> nil then
   begin
@@ -142,7 +142,7 @@ begin
     cvReleaseMat(@YUV2BGR);
     cvReleaseMat(@BGR2YUV);
   end;
-  SDL_DestroyCond(StopCond);
+  SDL_DestroyCondition(StopCond);
   SDL_DestroyMutex(Mutex);
   TextureCam.Free;
   inherited;
@@ -187,7 +187,7 @@ begin
   begin
     SDL_LockMutex(Mutex);
     IsEnabled := false;
-    SDL_CondSignal(StopCond);
+    SDL_SignalCondition(StopCond);
     SDL_UnlockMutex(Mutex);
     SDL_WaitThread(CaptureThread, nil);
     try
@@ -234,7 +234,7 @@ begin
     Now := SDL_GetTicks();
     if IsEnabled and (Now - LastTickFrame < Interval) then
     begin
-      SDL_CondWaitTimeout(StopCond, Mutex, Interval - (Now - LastTickFrame));
+      SDL_WaitConditionTimeout(StopCond, Mutex, Interval - (Now - LastTickFrame));
     end
   end;
   SDL_UnlockMutex(Mutex);

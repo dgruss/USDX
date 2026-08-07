@@ -37,7 +37,7 @@ uses
   URenderer,
   ULog,
   UIni,
-  SDL2;
+  SDL3;
 
 const
   DelayBetweenFrames : cardinal = 60;

@@ -215,11 +215,11 @@ if test x$FPC_PLATFORM = xwin32 -o x$FPC_PLATFORM = xwin64; then
     opencv_USE_CWRAPPER=yes
     AC_SUBST(USE_OPENCV_CWRAPPER, $opencv_USE_CWRAPPER)
 else
-# find sdl2
-PKG_HAVE([sdl2], [sdl2], yes)
+# find SDL3
+PKG_HAVE([sdl3], [sdl3], yes)
 
-# find SDL2_image
-PKG_HAVE([sdl2_image], [SDL2_image], yes)
+# find SDL3_image
+PKG_HAVE([sdl3_image], [sdl3-image], yes)
 
 # find freetype
 PKG_HAVE([freetype], [freetype2], yes)
@@ -554,4 +554,3 @@ if test x$FPC_PLATFORM = xdarwin; then
 !!! Packaging with $MACOS_PACKAGING and libdir $MACOS_PACKAGING_LIBDIR.
                    ])
 fi
-

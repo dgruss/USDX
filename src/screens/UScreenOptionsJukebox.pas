@@ -48,7 +48,7 @@ uses
   UPath,
   UNote,
   UThemes,
-  sdl2,
+  SDL3,
   UText;
 
 type
@@ -336,8 +336,8 @@ begin
         end;
     end;
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-              + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+              + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check special keys
     case PressedKey of
@@ -373,7 +373,7 @@ begin
 
             if (InteractionID(SelInteraction) in [iRedSlide, iGreenSlide, iBlueSlide]) then
             begin
-              if (SDL_ModState and (KMOD_LSHIFT or KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt <= 245) then
+              if (SDL_ModState and (SDL_KMOD_LSHIFT or SDL_KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt <= 245) then
                 Salt_Mod := 9
               else
                 Salt_Mod := 0;
@@ -423,7 +423,7 @@ begin
 
             if (InteractionID(SelInteraction) in [iRedSlide, iGreenSlide, iBlueSlide]) then
             begin
-              if (SDL_ModState and (KMOD_LSHIFT or KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt >= 10) then
+              if (SDL_ModState and (SDL_KMOD_LSHIFT or SDL_KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt >= 10) then
                 Salt_Mod := 9
               else
                 Salt_Mod := 0;

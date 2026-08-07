@@ -39,7 +39,7 @@ uses
   typinfo, // for GetEnumName
   fgl, // TGFMap
   math,
-  SDL2;
+  SDL3;
 
 const
 
@@ -214,10 +214,10 @@ type
   end;
   TJoyControllerGameController = class(TJoyController)
     private
-      GameController: PSDL_GameController;
+      GameController: PSDL_Gamepad;
 
     public
-      constructor Create(DeviceId: integer; GC: PSDL_GameController; Name: string = ''); overload;
+      constructor Create(DeviceId: integer; GC: PSDL_Gamepad; Name: string = ''); overload;
       destructor Destroy(); override;
 
       function GetJoystick(): Pointer; override;
@@ -325,14 +325,14 @@ begin
 
   // the LogDebug statements here are commented out because this is extremely spammy if a joystick/controller is used
   case Event.type_ of
-  SDL_JOYAXISMOTION:
+  SDL_EVENT_JOYSTICK_AXIS_MOTION:
     with Event.jaxis do
     begin
       // Log.LogDebug(Format('JOYAXISMOTION [%d] Axis:%d  Value:%d  Time:%d', [which, axis, value, timestamp]), 'TJoy.Polling');
-      Joy.OnControllerMotion(which, axis, EnsureRange((1.0*value) / JOYSTICK_AXIS_MAX_RANGE, -1.0, 1.0), timestamp, true);
+      Joy.OnControllerMotion(which, axis, EnsureRange((1.0*value) / JOYSTICK_AXIS_MAX_RANGE, -1.0, 1.0), SDL_NS_TO_MS(timestamp), true);
     end;
 
-  SDL_JOYHATMOTION:
+  SDL_EVENT_JOYSTICK_HAT_MOTION:
     with Event.jhat do
     begin
       // Log.LogDebug(Format('JOYHATMOTION [%d] Pad:%d  Value:%d  Time:%d', [which, hat, value, timestamp]), 'TJoy.Polling');
@@ -340,50 +340,54 @@ begin
                                        ifthen(value and SDL_HAT_DOWN <> 0, -1, ifthen(value and SDL_HAT_UP <> 0, 1, 0)),
                                        true);
     end;
-  SDL_JOYBUTTONUP, SDL_JOYBUTTONDOWN:
+  SDL_EVENT_JOYSTICK_BUTTON_UP, SDL_EVENT_JOYSTICK_BUTTON_DOWN:
     with Event.jbutton do
     begin
       // Log.LogDebug(Format('JOYBUTTON [%d] Button:%d  State:%d  Type:%d  Time:%d', [which, button, state, type_, timestamp]), 'TJoy.Polling');
-      Joy.OnControllerButton(which, button, ifthen(state = SDL_PRESSED, bsPressed, bsReleased), true);
+      Joy.OnControllerButton(which, button, ifthen(down, bsPressed, bsReleased), true);
     end;
 
-  SDL_CONTROLLERDEVICEADDED:
+  SDL_EVENT_GAMEPAD_ADDED:
     begin
       // Log.LogDebug(Format('CONTROLLERDEVICEADDED [DeviceID=%d]', [Event.cdevice.which]), 'TJoy.Polling');
-      Joy.OnControllerAdded(Event.cdevice.which);
+      Joy.OnControllerAdded(Event.gdevice.which);
     end;
-  SDL_CONTROLLERDEVICEREMOVED:
+  SDL_EVENT_GAMEPAD_REMOVED:
     begin
       // Log.LogDebug(Format('CONTROLLERDEVICEREMOVED [InstanceID=%d]', [Event.cdevice.which]), 'TJoy.Polling');
-      Joy.OnControllerRemoved(Event.cdevice.which);
+      Joy.OnControllerRemoved(Event.gdevice.which);
     end;
-  SDL_CONTROLLERDEVICEREMAPPED:
+  SDL_EVENT_GAMEPAD_REMAPPED:
     begin
       // Log.LogDebug(Format('CONTROLLERDEVICEREMAPPED [InstanceID=%d]', [Event.cdevice.which]), 'TJoy.Polling');
-      Joy.OnControllerRemapped(Event.cdevice.which);
+      Joy.OnControllerRemapped(Event.gdevice.which);
     end;
 
-  SDL_CONTROLLERAXISMOTION:
-    with Event.caxis do
+  SDL_EVENT_GAMEPAD_AXIS_MOTION:
+    with Event.gaxis do
     begin
       // Log.LogDebug(Format('CONTROLLERAXISMOTION [%d] Axis:%d  Value:%d  Time:%d', [which, axis, value, timestamp]), 'TJoy.Polling');
-      Joy.OnControllerMotion(which, axis, EnsureRange((1.0*value) / JOYSTICK_AXIS_MAX_RANGE, -1.0, 1.0), timestamp);
+      Joy.OnControllerMotion(which, axis, EnsureRange((1.0*value) / JOYSTICK_AXIS_MAX_RANGE, -1.0, 1.0), SDL_NS_TO_MS(timestamp));
     end;
-  SDL_CONTROLLERBUTTONDOWN:
-    with Event.cbutton do
+  SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    with Event.gbutton do
     begin
       // Log.LogDebug(Format('CONTROLLERBUTTONDOWN [%d] Button:%d  State:%d  Type:%d  Time:%d', [which, button, state, type_, timestamp]), 'TJoy.Polling');
-      Joy.OnControllerButton(which, button, ifthen(state = SDL_PRESSED, bsPressed, bsReleased));
+      Joy.OnControllerButton(which, button, ifthen(down, bsPressed, bsReleased));
     end;
-  SDL_CONTROLLERBUTTONUP:
-    with Event.cbutton do
+  SDL_EVENT_GAMEPAD_BUTTON_UP:
+    with Event.gbutton do
     begin
       // Log.LogDebug(Format('CONTROLLERBUTTONUP [%d] Button:%d  State:%d  Type:%d  Time:%d', [which, button, state, type_, timestamp]), 'TJoy.Polling');
-      Joy.OnControllerButton(which, button, ifthen(state = SDL_PRESSED, bsPressed, bsReleased));
+      Joy.OnControllerButton(which, button, ifthen(down, bsPressed, bsReleased));
     end;
-  SDL_JOYDEVICEADDED:
+  SDL_EVENT_JOYSTICK_ADDED:
     begin
-      Joy := TJoy.Create;
+      Joy.OnControllerAdded(Event.jdevice.which);
+    end;
+  SDL_EVENT_JOYSTICK_REMOVED:
+    begin
+      Joy.OnControllerRemoved(Event.jdevice.which);
     end;
   end; // case
 end;
@@ -403,12 +407,16 @@ begin
 end;
 
 constructor TJoy.Create;
+type
+  TJoystickIDArray = array[0..0] of TSDL_JoystickID;
+  PJoystickIDArray = ^TJoystickIDArray;
 var
   Controller, LoopController: TJoyController;
   Error: string;
 
   N: integer;
   I: integer;
+  JoystickIDs: PSDL_JoystickID;
 begin
   inherited;
 
@@ -416,15 +424,19 @@ begin
   Controllers.Sorted := true;
   Controller := nil;
 
-  SDL_InitSubSystem( SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER );
-  N := SDL_NumJoysticks;
+  SDL_InitSubSystem( SDL_INIT_JOYSTICK or SDL_INIT_GAMEPAD );
+  JoystickIDs := SDL_GetJoysticks(@N);
   Log.LogStatus(Format('Joystick count: %d', [N]), 'TJoy.Create');
-  for i := 0 to n-1 do
-  begin
-    if not AddController(i, Error) then
+  try
+    for i := 0 to n-1 do
     begin
-      Log.LogError(Error, 'TJoy.Create');
+      if not AddController(PJoystickIDArray(JoystickIDs)^[i], Error) then
+      begin
+        Log.LogError(Error, 'TJoy.Create');
+      end;
     end;
+  finally
+    SDL_free(JoystickIDs);
   end;
 
   if Controllers.Count < 1 then
@@ -506,19 +518,20 @@ end;
 function TJoy.AddController(DeviceId: integer; out Error: string): boolean;
 var
   JoyStick:    PSDL_Joystick;
-  GameController:    PSDL_GameController;
+  GameController:    PSDL_Gamepad;
   Controller: TJoyController;
   s: string;
 begin
   Result := true;
-  if SDL_IsGameController(DeviceId) = SDL_TRUE then
+  Controller := nil;
+  if SDL_IsGamepad(DeviceId) then
   begin
-    s := SDL_GameControllerNameForIndex(DeviceId);
+    s := SDL_GetGamepadNameForID(DeviceId);
     Log.LogStatus(Format('Is a game controller: %s [ID=%d]', [s, DeviceId]), 'TJoy.AddController');
-    GameController := SDL_GameControllerOpen(DeviceId);
+    GameController := SDL_OpenGamepad(DeviceId);
     if GameController = nil then
     begin
-      Error := 'SDL_GameControllerOpen failed';
+      Error := 'SDL_OpenGamepad failed';
       Result := false;
     end
     else
@@ -529,18 +542,18 @@ begin
   end
   else
   begin
-    s := SDL_JoystickNameForIndex(DeviceId);
+    s := SDL_GetJoystickNameForID(DeviceId);
     Log.LogStatus(Format('Is a Joystick: %s [ID=%d]', [s, DeviceId]), 'TJoy.AddController');
-    JoyStick := SDL_JoystickOpen(DeviceId);
+    JoyStick := SDL_OpenJoystick(DeviceId);
     if JoyStick = nil then
     begin
-      Error := 'SDL_JoystickOpen failed';
+      Error := 'SDL_OpenJoystick failed';
       Result := false;
     end
     else
     begin
       Controller := TJoyControllerJoyStick.Create(DeviceId, JoyStick, s);
-      Controllers.Add(Controller.InstanceId, TJoyControllerJoyStick.Create(DeviceId, JoyStick, s));
+      Controllers.Add(Controller.InstanceId, Controller);
     end;
   end;
 
@@ -723,7 +736,7 @@ begin
 end;
 function TJoyController.GetInstanceId(): integer;
 begin
-  Result := SDL_JoystickInstanceID(GetJoystick());
+  Result := SDL_GetJoystickID(GetJoystick());
 end;
 function TJoyController.GetName(): string;
 begin
@@ -765,18 +778,16 @@ var
 begin
   Result := true;
 
-  Log.LogInfo(Format('Simulate Key: %s  Pressed: %d', [SDL_GetScancodeName(SDL_GetScancodeFromKey(Key)), integer(Pressed)]), 'TJoy.Simulate');
+  Log.LogInfo(Format('Simulate Key: %s  Pressed: %d', [SDL_GetScancodeName(SDL_GetScancodeFromKey(Key, nil)), integer(Pressed)]), 'TJoy.Simulate');
 
   // switch back to non-mouse mode (alias keyboard simulation)
   if not NoMouseOverride then MouseMode := false;
 
   JoyEvent := Default(TSDL_Event);
-  JoyEvent.type_ := ifthen(Pressed, SDL_KEYDOWN, SDL_KEYUP);
-  JoyEvent.key.keysym.sym := Key;
-  JoyEvent.key.keysym.scancode := SDL_GetScancodeFromKey(Key);
-
-  // always send empty/zero unicode char as workaround. Check UMain.CheckEvents
-  JoyEvent.key.keysym.unicode := 0;
+  JoyEvent.type_ := ifthen(Pressed, SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_UP);
+  JoyEvent.key.key := Key;
+  JoyEvent.key.scancode := SDL_GetScancodeFromKey(Key, nil);
+  JoyEvent.key.down := Pressed;
 
   SDL_PushEvent(@JoyEvent);
 end;
@@ -795,9 +806,10 @@ begin
   DiffTime := SDL_GetTicks() - LastMouseState.Time;
   Speed := (DiffTime / 1000.0) * JOYSTICK_MOUSE_DEFAULTSPEED;
 
-  MouseEvent.type_ := SDL_MOUSEMOTION;
-  MouseEvent.button.x := LastMouseState.X + Round(LastMouseState.DeltaX * Speed);
-  MouseEvent.button.y := LastMouseState.Y + Round(LastMouseState.DeltaY * Speed);
+  MouseEvent := Default(TSDL_Event);
+  MouseEvent.type_ := SDL_EVENT_MOUSE_MOTION;
+  MouseEvent.motion.x := LastMouseState.X + Round(LastMouseState.DeltaX * Speed);
+  MouseEvent.motion.y := LastMouseState.Y + Round(LastMouseState.DeltaY * Speed);
   SDL_PushEvent(@MouseEvent);
 end;
 
@@ -963,17 +975,17 @@ end;
 
 function TJoyController.GetControllerButtonCount(): integer;
 begin
-  Result := SDL_JoystickNumButtons(GetJoystick());
+  Result := SDL_GetNumJoystickButtons(GetJoystick());
 end;
 
 function TJoyController.GetControllerAxesCount(): integer;
 begin
-  Result := SDL_JoystickNumAxes(GetJoystick());
+  Result := SDL_GetNumJoystickAxes(GetJoystick());
 end;
 
 function TJoyController.GetControllerHatsCount(): integer;
 begin
-  Result := SDL_JoystickNumHats(GetJoystick());
+  Result := SDL_GetNumJoystickHats(GetJoystick());
 end;
 
 function TJoyController.TranslateAxisToKey(Axis: integer; Direction: integer; out Key: TSDL_KeyCode): boolean;
@@ -1024,7 +1036,7 @@ begin
 
   if assigned(JoyStick) then
   begin
-    SDL_JoystickClose(JoyStick);
+    SDL_CloseJoystick(JoyStick);
     JoyStick := nil;
   end;
 end;
@@ -1034,7 +1046,7 @@ begin
   Result := JoyStick;
 end;
 
-constructor TJoyControllerGameController.Create(DeviceId: integer; GC: PSDL_GameController; Name: string);
+constructor TJoyControllerGameController.Create(DeviceId: integer; GC: PSDL_Gamepad; Name: string);
 begin
   inherited
   Create(DeviceId, Name);
@@ -1049,14 +1061,14 @@ begin
 
   if assigned(GameController) then
   begin
-    SDL_GameControllerClose(GameController);
+    SDL_CloseGamepad(GameController);
     GameController := nil;
   end;
 end;
 
 function TJoyControllerGameController.GetJoystick(): Pointer;
 begin
-  Result := SDL_GameControllerGetJoystick(GameController);
+  Result := SDL_GetGamepadJoystick(GameController);
 end;
 
 function TJoyControllerGameController.ShouldIgnoreLegacy(): boolean;
@@ -1173,8 +1185,8 @@ begin
   if Direction > 0 then
   begin
     case Axis of
-      SDL_CONTROLLER_AXIS_RIGHTX: Key := SDLK_RIGHT;
-      SDL_CONTROLLER_AXIS_RIGHTY: Key := SDLK_UP;
+      SDL_GAMEPAD_AXIS_RIGHTX: Key := SDLK_RIGHT;
+      SDL_GAMEPAD_AXIS_RIGHTY: Key := SDLK_UP;
       otherwise Exit;
     end;
     Result := true;
@@ -1183,8 +1195,8 @@ begin
   else if Direction < 0 then
   begin
     case Axis of
-      SDL_CONTROLLER_AXIS_RIGHTX: Key := SDLK_LEFT;
-      SDL_CONTROLLER_AXIS_RIGHTY: Key := SDLK_DOWN;
+      SDL_GAMEPAD_AXIS_RIGHTX: Key := SDLK_LEFT;
+      SDL_GAMEPAD_AXIS_RIGHTY: Key := SDLK_DOWN;
       otherwise Exit;
     end;
     Result := true;
@@ -1196,8 +1208,8 @@ begin
   Result := false;
 
   case Axis of
-    SDL_CONTROLLER_AXIS_LEFTX: MouseAxis := 0;
-    SDL_CONTROLLER_AXIS_LEFTY: MouseAxis := 1;
+    SDL_GAMEPAD_AXIS_LEFTX: MouseAxis := 0;
+    SDL_GAMEPAD_AXIS_LEFTY: MouseAxis := 1;
     otherwise Exit;
   end;
   Result := true;
@@ -1213,10 +1225,10 @@ begin
   Result := true;
 
   case ButtonId of
-    SDL_CONTROLLER_BUTTON_A: Button := SDL_BUTTON_LEFT;
-    SDL_CONTROLLER_BUTTON_B: Button := SDL_BUTTON_RIGHT;
-    SDL_CONTROLLER_BUTTON_LEFTSTICK,
-    SDL_CONTROLLER_BUTTON_RIGHTSTICK: Button := SDL_BUTTON_MIDDLE;
+    SDL_GAMEPAD_BUTTON_SOUTH: Button := SDL_BUTTON_LEFT;
+    SDL_GAMEPAD_BUTTON_EAST: Button := SDL_BUTTON_RIGHT;
+    SDL_GAMEPAD_BUTTON_LEFT_STICK,
+    SDL_GAMEPAD_BUTTON_RIGHT_STICK: Button := SDL_BUTTON_MIDDLE;
 
     // TODO: Mouse wheel
     // Button := SDL_BUTTON_WHEELUP
@@ -1230,10 +1242,10 @@ begin
 
   Result := true;
   case ButtonId of
-    SDL_CONTROLLER_BUTTON_DPAD_UP: Key := SDLK_UP;
-    SDL_CONTROLLER_BUTTON_DPAD_DOWN: Key := SDLK_DOWN;
-    SDL_CONTROLLER_BUTTON_DPAD_LEFT: Key := SDLK_LEFT;
-    SDL_CONTROLLER_BUTTON_DPAD_RIGHT: Key := SDLK_RIGHT;
+    SDL_GAMEPAD_BUTTON_DPAD_UP: Key := SDLK_UP;
+    SDL_GAMEPAD_BUTTON_DPAD_DOWN: Key := SDLK_DOWN;
+    SDL_GAMEPAD_BUTTON_DPAD_LEFT: Key := SDLK_LEFT;
+    SDL_GAMEPAD_BUTTON_DPAD_RIGHT: Key := SDLK_RIGHT;
     otherwise Result := false;
   end;
 
@@ -1248,18 +1260,18 @@ begin
   if MouseMode then
   begin
     case ButtonId of
-      SDL_CONTROLLER_BUTTON_START: Key := SDLK_RETURN;
-      SDL_CONTROLLER_BUTTON_BACK: Key := SDLK_ESCAPE;
+      SDL_GAMEPAD_BUTTON_START: Key := SDLK_RETURN;
+      SDL_GAMEPAD_BUTTON_BACK: Key := SDLK_ESCAPE;
       otherwise Result := false;
     end;
   end
   else
   begin
     case ButtonId of
-      SDL_CONTROLLER_BUTTON_A: Key := SDLK_RETURN;
-      SDL_CONTROLLER_BUTTON_B: Key := SDLK_ESCAPE;
-      SDL_CONTROLLER_BUTTON_Y: Key := SDLK_m;
-      SDL_CONTROLLER_BUTTON_X: Key := SDLK_r;
+      SDL_GAMEPAD_BUTTON_SOUTH: Key := SDLK_RETURN;
+      SDL_GAMEPAD_BUTTON_EAST: Key := SDLK_ESCAPE;
+      SDL_GAMEPAD_BUTTON_NORTH: Key := SDLK_m;
+      SDL_GAMEPAD_BUTTON_WEST: Key := SDLK_r;
       otherwise Result := false;
     end;
   end;
@@ -1270,10 +1282,10 @@ begin
   if MouseMode then
   begin
     case ButtonId of
-      SDL_CONTROLLER_BUTTON_DPAD_UP,
-      SDL_CONTROLLER_BUTTON_DPAD_DOWN,
-      SDL_CONTROLLER_BUTTON_DPAD_LEFT,
-      SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+      SDL_GAMEPAD_BUTTON_DPAD_UP,
+      SDL_GAMEPAD_BUTTON_DPAD_DOWN,
+      SDL_GAMEPAD_BUTTON_DPAD_LEFT,
+      SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
         MouseMode := false;
     end;
   end;

@@ -256,7 +256,7 @@ uses
   PortTime,
 {$ENDIF}
   UMain,
-  SDL2;
+  SDL3;
 {$ENDIF}
 
 const

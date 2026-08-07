@@ -40,7 +40,7 @@ uses
   UMusic,
   USongs,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type

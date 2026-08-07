@@ -36,7 +36,7 @@ interface
 uses
   UCommon,
   UThemes,
-  sdl2,
+  SDL3,
   UGraphicClasses,
   UIni;
 

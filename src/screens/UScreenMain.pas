@@ -43,7 +43,7 @@ uses
   USong,
   UThemes,
   MD5,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type

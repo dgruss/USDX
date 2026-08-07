@@ -38,7 +38,7 @@ uses
   UMenuStatic,
   SysUtils,
   UThemes,
-  sdl2;
+  SDL3;
 
 type
   TScreenLoading = class(TMenu)

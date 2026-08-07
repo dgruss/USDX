@@ -19,7 +19,7 @@ uses
 implementation
 
 uses
-  sdl2,
+  SDL3,
   ctypes,
   math,
   UIni,
@@ -39,8 +39,8 @@ type
 
   TSDLInputDevice = class(TAudioInputDevice)
     private
-      DevID:   TSDL_AudioDeviceID;
-      UseName: boolean;
+      DeviceID: TSDL_AudioDeviceID;
+      Stream: PSDL_AudioStream;
     public
       function Start(): boolean; override;
       function Stop():  boolean; override;
@@ -122,21 +122,25 @@ begin
 end;
 
 function TAudioInput_SDL.EnumDevices(): boolean;
+type
+  TAudioDeviceIDArray = array[0..0] of TSDL_AudioDeviceID;
+  PAudioDeviceIDArray = ^TAudioDeviceIDArray;
 var
   i:            integer;
   deviceIndex:  integer;
   maxDevices:   integer;
-  name:         PChar;
+  name:         PAnsiChar;
+  deviceIDs:    PSDL_AudioDeviceID;
   device:       TSDLInputDevice;
   spec:         TSDL_AudioSpec;
-  dev:          TSDL_AudioDeviceID;
+  sampleFrames: integer;
   deviceName:   UTF8String;
 begin
   Result := false;
 
   Log.LogInfo('Using ' + SDL_GetCurrentAudioDriver + ' driver', 'SDL');
 
-  maxDevices := SDL_GetNumAudioDevices(1);
+  deviceIDs := SDL_GetAudioRecordingDevices(@maxDevices);
   if maxDevices < 1 then
     maxDevices := 1;
 
@@ -146,9 +150,10 @@ begin
   deviceIndex := 0;
   for i := 0 to High(AudioInputProcessor.DeviceList) do
   begin
-    name := SDL_GetAudioDeviceName(i, 1);
-    if (name = nil) and (i > 0) then
-      break;
+    if deviceIDs <> nil then
+      name := SDL_GetAudioDeviceName(PAudioDeviceIDArray(deviceIDs)^[i])
+    else
+      name := nil;
 
     deviceName := DEFAULT_SOURCE_NAME;
     if (name <> nil) then
@@ -161,22 +166,21 @@ begin
     with spec do
     begin
       freq := 44100;
-      format := AUDIO_S16SYS;
-      channels := 0; // override with SDL_AUDIO_CHANNELS
-      samples := 0;
+      format := SDL_AUDIO_S16;
+      channels := 1;
     end;
 
-    dev := SDL_OpenAudioDevice(name, 1, @spec, @spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE or SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
-    if dev < 1 then
-      continue;
-
-    SDL_CloseAudioDevice(dev);
+    sampleFrames := 0;
+    if deviceIDs <> nil then
+      SDL_GetAudioDeviceFormat(PAudioDeviceIDArray(deviceIDs)^[i], @spec, @sampleFrames);
+    spec.format := SDL_AUDIO_S16;
 
     device := TSDLInputDevice.Create();
     device.Name := deviceName;
-    device.UseName := false;
-    if name <> nil then
-      device.UseName := true;
+    if deviceIDs <> nil then
+      device.DeviceID := PAudioDeviceIDArray(deviceIDs)^[i]
+    else
+      device.DeviceID := SDL_AUDIO_DEVICE_DEFAULT_RECORDING;
 
     device.MicSource := -1;
     device.SourceRestore := -1;
@@ -194,12 +198,13 @@ begin
     Log.LogStatus('InputDevice "' + device.Name + '"@' +
         IntToStr(device.AudioFormat.Channels) + 'x' +
         FloatToStr(device.AudioFormat.SampleRate) + 'Hz ' +
-        'defaults to ' + IntToStr(spec.samples) + ' samples buffer',
+        'defaults to ' + IntToStr(sampleFrames) + ' samples buffer',
         'SDL');
 
     AudioInputProcessor.DeviceList[deviceIndex] := device;
     Inc(deviceIndex);
   end;
+  SDL_free(deviceIDs);
 
   // adjust size to actual input-device count
   SetLength(AudioInputProcessor.DeviceList, deviceIndex);
@@ -211,7 +216,7 @@ function TAudioInput_SDL.InitializeRecord(ScanMode: TAudioInputScanMode): boolea
 begin
   Result := false;
 
-  if SDL_InitSubSystem(SDL_INIT_AUDIO) = -1 then
+  if not SDL_InitSubSystem(SDL_INIT_AUDIO) then
     Exit;
 
   Initialized := true;

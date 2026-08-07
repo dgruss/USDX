@@ -99,7 +99,7 @@ jobs:
           fi
       - name: Install Dependencies
         run: |
-          brew install fpc sdl2 sdl2_image automake portaudio lua ffmpeg opencv
+          brew install fpc sdl3 sdl3_image automake portaudio lua ffmpeg opencv
       - name: Generate Build Scripts
         run: ./autogen.sh
       - name: Configure Project

@@ -36,7 +36,7 @@ interface
 uses
   SysUtils,
   Math,
-  sdl2,
+  SDL3,
   UPath,
   UMenuBackground,
   UMenuButton,
@@ -1229,7 +1229,7 @@ var
 begin
   for J := MinNumber to (Length(WidgetsSrc) - 1) do
   begin
-    SDL_FreeSurface(WidgetsSrc[J]);
+    SDL_DestroySurface(WidgetsSrc[J]);
     dispose(WidgetsRect[J]);
   end;
 

@@ -42,7 +42,7 @@ uses
   UScreensong,
   USongs,
   UThemes,
-  sdl2;
+  SDL3;
 
 type
   TScreenOptionsGame = class(TOptionsMenu)

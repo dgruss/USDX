@@ -51,7 +51,7 @@ uses
   USongs,
   UThemes,
   UTime,
-  sdl2,
+  SDL3,
   SysUtils,
   UText;
 
@@ -238,8 +238,8 @@ begin
   if (PressedDown) then
   begin // key down
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check normal keys
     case PressedKey of
@@ -381,7 +381,7 @@ begin
       // toggle time display: running time/remaining time/total time / SHIFT: show/hide time bar
       SDLK_T:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -405,7 +405,7 @@ begin
       // skip intro / SHIFT: show/hide score display
       SDLK_S:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -430,7 +430,7 @@ begin
       // SHIFT: show/hide oscilloscope
       SDLK_O:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -443,7 +443,7 @@ begin
       // SHIFT: show/hide notes
       SDLK_N:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -462,7 +462,7 @@ begin
       // SHIFT: show/hide notes
       SDLK_L:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -475,7 +475,7 @@ begin
       // SHIFT: show/hide avatars and player names
       SDLK_A:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -496,7 +496,7 @@ begin
       // SHIFT: show/hide microphone input/sung notes
       SDLK_I:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -509,7 +509,7 @@ begin
       // SHIFT: show/hide (toggle) all display elements
       SDLK_H:
       begin
-        if (SDL_ModState = KMOD_LSHIFT) then
+        if (SDL_ModState = SDL_KMOD_LSHIFT) then
         begin
           if (ScreenSong.Mode <> smNormal) and (ScreenSong.Mode <> smMedley) then
             Exit;
@@ -560,7 +560,7 @@ begin
 
       SDLK_RIGHT:
       begin
-        if ((SDL_ModState and KMOD_LCTRL) <> 0) then
+        if ((SDL_ModState and SDL_KMOD_LCTRL) <> 0) then
         begin
           NewPosition := AudioPlayback.Position + 5.0;
           AudioPlayback.SetPosition(NewPosition);
@@ -571,7 +571,7 @@ begin
 
       SDLK_LEFT:
       begin
-        if (SDL_ModState = KMOD_LCTRL) then // seek 5 seconds backward and reset scores to avoid cheating
+        if (SDL_ModState = SDL_KMOD_LCTRL) then // seek 5 seconds backward and reset scores to avoid cheating
         begin
           if (AudioPlayback.Position < 20.0) then
           exit;
@@ -606,7 +606,7 @@ begin
 
       SDLK_TAB:
       begin
-        if (SDL_ModState = KMOD_LCTRL) then // change visualization preset
+        if (SDL_ModState = SDL_KMOD_LCTRL) then // change visualization preset
         begin
           if fShowVisualization then
             fCurrentVideo.Position := now; // move to a random position

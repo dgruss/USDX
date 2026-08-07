@@ -35,7 +35,7 @@ interface
 
 uses
   UMusic,
-  SDL2;
+  SDL3;
 
 function ConvertAudioFormatToSDL(Format: TAudioSampleFormat; out SDLFormat: UInt16): boolean;
 function ConvertAudioFormatFromSDL(SDLFormat: UInt16; out Format: TAudioSampleFormat): boolean;
@@ -45,16 +45,13 @@ implementation
 function ConvertAudioFormatToSDL(Format: TAudioSampleFormat; out SDLFormat: UInt16): boolean;
 begin
   case Format of
-    asfU8:     SDLFormat := AUDIO_U8;
-    asfS8:     SDLFormat := AUDIO_S8;
-    asfU16LSB: SDLFormat := AUDIO_U16LSB;
-    asfS16LSB: SDLFormat := AUDIO_S16LSB;
-    asfU16MSB: SDLFormat := AUDIO_U16MSB;
-    asfS16MSB: SDLFormat := AUDIO_S16MSB;
-    asfU16:    SDLFormat := AUDIO_U16SYS;
-    asfS16:    SDLFormat := AUDIO_S16SYS;
-    asfS32:    SDLFormat := AUDIO_S32SYS;
-    asfFloat:  SDLFormat := AUDIO_F32SYS;
+    asfU8:     SDLFormat := UInt16(SDL_AUDIO_U8);
+    asfS8:     SDLFormat := UInt16(SDL_AUDIO_S8);
+    asfS16LSB: SDLFormat := UInt16(SDL_AUDIO_S16LE);
+    asfS16MSB: SDLFormat := UInt16(SDL_AUDIO_S16BE);
+    asfS16:    SDLFormat := UInt16(SDL_AUDIO_S16);
+    asfS32:    SDLFormat := UInt16(SDL_AUDIO_S32);
+    asfFloat:  SDLFormat := UInt16(SDL_AUDIO_F32);
     else begin
       Result := false;
       Exit;
@@ -66,20 +63,12 @@ end;
 function ConvertAudioFormatFromSDL(SDLFormat: UInt16; out Format: TAudioSampleFormat): boolean;
 begin
   case SDLFormat of
-    AUDIO_U8:     Format := asfU8;
-    AUDIO_S8:     Format := asfS8;
-    AUDIO_U16SYS: Format := asfU16;
-    AUDIO_S16SYS: Format := asfS16;
-{$IF AUDIO_U16SYS <> AUDIO_U16LSB}
-    AUDIO_U16LSB: Format := asfU16LSB;
-    AUDIO_S16LSB: Format := asfS16LSB;
-{$ENDIF}
-{$IF AUDIO_U16SYS <> AUDIO_U16MSB}
-    AUDIO_U16MSB: Format := asfU16MSB;
-    AUDIO_S16MSB: Format := asfS16MSB;
-{$ENDIF}
-    AUDIO_S32SYS: Format := asfS32;
-    AUDIO_F32SYS: Format := asfFloat;
+    UInt16(SDL_AUDIO_U8):    Format := asfU8;
+    UInt16(SDL_AUDIO_S8):    Format := asfS8;
+    UInt16(SDL_AUDIO_S16LE): Format := asfS16LSB;
+    UInt16(SDL_AUDIO_S16BE): Format := asfS16MSB;
+    UInt16(SDL_AUDIO_S32):   Format := asfS32;
+    UInt16(SDL_AUDIO_F32):   Format := asfFloat;
     else begin
       Result := false;
       Exit;

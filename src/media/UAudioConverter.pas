@@ -42,7 +42,7 @@ uses
   UMediaCore_FFmpeg,
   swresample,
   UMediaCore_SDL,
-  sdl2,
+  SDL3,
   SysUtils,
   Math;
 
@@ -63,7 +63,8 @@ type
    *}
   TAudioConverter_SDL = class(TAudioConverter)
     private
-      cvt: TSDL_AudioCVT;
+      Stream: PSDL_AudioStream;
+      Ratio: double;
     public
       function Init(SrcFormatInfo: TAudioFormatInfo; DstFormatInfo: TAudioFormatInfo): boolean; override;
       destructor Destroy(); override;
@@ -95,6 +96,7 @@ function TAudioConverter_SDL.Init(srcFormatInfo: TAudioFormatInfo; dstFormatInfo
 var
   srcFormat: UInt16;
   dstFormat: UInt16;
+  SrcSpec, DstSpec: TSDL_AudioSpec;
 begin
   inherited Init(SrcFormatInfo, DstFormatInfo);
 
@@ -107,20 +109,27 @@ begin
     Exit;
   end;
 
-  if SDL_BuildAudioCVT(@cvt,
-    srcFormat, srcFormatInfo.Channels, Round(srcFormatInfo.SampleRate),
-    dstFormat, dstFormatInfo.Channels, Round(dstFormatInfo.SampleRate)) = -1 then
+  SrcSpec.format := TSDL_AudioFormat(srcFormat);
+  SrcSpec.channels := srcFormatInfo.Channels;
+  SrcSpec.freq := Round(srcFormatInfo.SampleRate);
+  DstSpec.format := TSDL_AudioFormat(dstFormat);
+  DstSpec.channels := dstFormatInfo.Channels;
+  DstSpec.freq := Round(dstFormatInfo.SampleRate);
+  Stream := SDL_CreateAudioStream(@SrcSpec, @DstSpec);
+  if Stream = nil then
   begin
     Log.LogError(SDL_GetError(), 'TSoftMixerPlaybackStream.InitFormatConversion');
     Exit;
   end;
 
+  Ratio := srcFormatInfo.GetRatio(dstFormatInfo);
   Result := true;
 end;
 
 destructor TAudioConverter_SDL.Destroy();
 begin
-  // nothing to be done here
+  if Stream <> nil then
+    SDL_DestroyAudioStream(Stream);
   inherited;
 end;
 
@@ -130,14 +139,13 @@ end;
  *)
 function TAudioConverter_SDL.GetOutputBufferSize(InputSize: integer): integer;
 begin
-  // Note: len_ratio must not be used here. Even if the len_ratio is 1.0, len_mult might be 2.
-  // Example: 44.1kHz/mono to 22.05kHz/stereo -> len_ratio=1, len_mult=2
-  Result := InputSize * cvt.len_mult;
+  // Leave room for the resampler's final frames when the stream is flushed.
+  Result := Ceil(InputSize * Ratio) + DstFormatInfo.FrameSize * 64;
 end;
 
 function TAudioConverter_SDL.GetRatio(): double;
 begin
-  Result := cvt.len_ratio;
+  Result := Ratio;
 end;
 
 function TAudioConverter_SDL.Convert(InputBuffer: PByteArray; OutputBuffer: PByteArray;
@@ -153,14 +161,22 @@ begin
     Exit;
   end;
 
-  // OutputBuffer is always bigger than or equal to InputBuffer
-  Move(InputBuffer[0], OutputBuffer[0], InputSize);
-  cvt.buf := PUint8(OutputBuffer);
-  cvt.len := InputSize;
-  if SDL_ConvertAudio(@cvt) = -1 then
+  if not SDL_ClearAudioStream(Stream) or
+     not SDL_PutAudioStreamData(Stream, @InputBuffer[0], InputSize) or
+     not SDL_FlushAudioStream(Stream) then
+  begin
+    Log.LogError(SDL_GetError(), 'TAudioConverter_SDL.Convert');
     Exit;
+  end;
 
-  Result := cvt.len_cvt;
+  Result := SDL_GetAudioStreamAvailable(Stream);
+  if Result > GetOutputBufferSize(InputSize) then
+  begin
+    Log.LogError('SDL audio conversion exceeded output buffer', 'TAudioConverter_SDL.Convert');
+    Result := -1;
+    Exit;
+  end;
+  Result := SDL_GetAudioStreamData(Stream, @OutputBuffer[0], Result);
 end;
 
 {$IF LIBAVUTIL_VERSION >= 59000000}

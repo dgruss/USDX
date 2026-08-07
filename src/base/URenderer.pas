@@ -31,7 +31,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   UPath;
 
 const
@@ -429,7 +429,7 @@ begin
   begin
     Log.LogError('Could not convert surface', 'TRenderer.LoadTexture');
     Result := CreateEmptyTexture(Identifier);
-    SDL_FreeSurface(TexSurface);
+    SDL_DestroySurface(TexSurface);
     Exit;
   end;
 
@@ -448,9 +448,9 @@ begin
   if (Typ = TEXTURE_TYPE_COLORIZED) then
     ColorizeImage(TexSurface, Col);
 
-  SDL_LockSurface(TexSurface); // unlocked by SDL_FreeSurface
+  SDL_LockSurface(TexSurface); // unlocked by SDL_DestroySurface
   Result := LoadTexture(TexSurface^.pixels, TexSurface^.w, TexSurface^.h, Identifier, Typ);
-  SDL_FreeSurface(TexSurface);
+  SDL_DestroySurface(TexSurface);
 end;
 
 function TRenderer.GetTexture(const Name: IPath; Typ: TTextureType): TTexture;
@@ -681,9 +681,9 @@ var
   MajorVersion: integer;
   MinorVersion: integer;
   glcontext: TSDL_GLContext;
-  MajorArray: array of SInt32;
-  MinorArray: array of SInt32;
-  ProfileArray: array of SInt32;
+  MajorArray: array of integer;
+  MinorArray: array of integer;
+  ProfileArray: array of integer;
   I: integer;
 begin
 
@@ -804,7 +804,7 @@ end;
 procedure AdjustPixelFormat(var TexSurface: PSDL_Surface; Typ: TTextureType);
 var
   TempSurface: PSDL_Surface;
-  NeededPixFmt: UInt32;
+  NeededPixFmt: TSDL_PixelFormat;
 begin
   if      (Typ = TEXTURE_TYPE_PLAIN) then
     NeededPixFmt := SDL_PIXELFORMAT_RGB24
@@ -814,11 +814,11 @@ begin
   else
     NeededPixFmt := SDL_PIXELFORMAT_RGB24;
 
-  if not (TexSurface^.format.format = NeededPixFmt) then
+  if TexSurface^.format <> NeededPixFmt then
   begin
     TempSurface := TexSurface;
-    TexSurface := SDL_ConvertSurfaceFormat(TempSurface, NeededPixFmt, 0);
-    SDL_FreeSurface(TempSurface);
+    TexSurface := SDL_ConvertSurface(TempSurface, NeededPixFmt);
+    SDL_DestroySurface(TempSurface);
   end;
 end;
 

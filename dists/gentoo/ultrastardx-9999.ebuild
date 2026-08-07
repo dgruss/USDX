@@ -16,8 +16,8 @@ KEYWORDS="~amd64 ~x86"
 IUSE="midi projectm debug webcam portaudio"
 
 RDEPEND="virtual/opengl
-	media-libs/libsdl2[opengl]
-	media-libs/sdl2-image[png,jpeg]
+	media-libs/libsdl3[opengl]
+	media-libs/sdl3-image[png,jpeg]
 	media-libs/freetype
 	portaudio? ( =media-libs/portaudio-19* )
 	media-video/ffmpeg

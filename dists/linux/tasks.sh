@@ -238,26 +238,20 @@ Cflags: -I$PREFIX/include
 EOF
 }
 
-task_sdl2() {
-	start_build SDL2 || return 0
-	bash ./autogen.sh
-	sed -i 's/GBM_BO_USE_CURSOR\>/&_64X64/g' src/video/kmsdrm/SDL_kmsdrmmouse.c
-	mkdir -p build
-	cd build
-	../configure --prefix="$PREFIX" PKG_CONFIG_PATH="$PKG_CONFIG_PATH" CC="$CC" CXX="$CXX" CFLAGS="$CFLAGS -std=gnu99" \
-		--disable-arts --disable-esd --disable-nas \
-		--disable-sndio --enable-pulseaudio-shared --enable-pulseaudio \
-		--enable-pipewire --enable-pipewire-shared \
-		--enable-jack --enable-jack-shared \
-		--enable-video-opengl --disable-video-opengles1 \
-		--enable-video-wayland --enable-wayland-shared \
-		--enable-video-kmsdrm --enable-kmsdrm-shared \
-		--disable-video-vulkan \
-		--enable-x11-shared --disable-ibus --disable-fcitx --disable-ime \
-		--disable-rpath
-	make $makearg
-	make install
-	hide make distclean
+task_sdl3() {
+	start_build SDL3 || return 0
+	rm -rf build
+	cmake -S . -B build \
+		-DCMAKE_INSTALL_PREFIX="$PREFIX" \
+		-DCMAKE_INSTALL_LIBDIR=lib \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_C_COMPILER="$CC" \
+		-DCMAKE_C_FLAGS="$CFLAGS" \
+		-DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
+		-DSDL_SHARED=ON -DSDL_STATIC=OFF \
+		-DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+	cmake --build build -- $makearg
+	cmake --install build
 }
 
 task_libjpeg_turbo() {
@@ -285,14 +279,22 @@ task_libjpeg_turbo() {
 	rm -r build
 }
 
-task_sdl2_image() {
-	start_build SDL2_image || return 0
-	bash ./autogen.sh
-	./configure --prefix="$PREFIX" PKG_CONFIG_PATH="$PKG_CONFIG_PATH" CC="$CC" CXX="$CXX" \
-		--disable-static --disable-jpg-shared --disable-png-shared --disable-webp-shared --disable-tif-shared --disable-tif --disable-stb-image
-	make $makearg
-	make install
-	hide make distclean
+task_sdl3_image() {
+	start_build SDL3_image || return 0
+	rm -rf build
+	cmake -S . -B build \
+		-DCMAKE_INSTALL_PREFIX="$PREFIX" \
+		-DCMAKE_INSTALL_LIBDIR=lib \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_C_COMPILER="$CC" \
+		-DCMAKE_C_FLAGS="$CFLAGS" \
+		-DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
+		-DCMAKE_PREFIX_PATH="$PREFIX" \
+		-DBUILD_SHARED_LIBS=ON -DSDLIMAGE_VENDORED=OFF \
+		-DSDLIMAGE_BACKEND_STB=ON -DSDLIMAGE_AVIF=OFF \
+		-DSDLIMAGE_JXL=OFF -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
+	cmake --build build -- $makearg
+	cmake --install build
 }
 
 task_sqlite() {
@@ -632,9 +634,9 @@ if [ "$1" == "all_deps" ]; then
 	echo
 	task_xkbcommon
 	echo
-	task_sdl2
+	task_sdl3
 	echo
-	task_sdl2_image
+	task_sdl3_image
 	echo
 
 	task_sqlite

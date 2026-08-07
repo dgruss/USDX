@@ -44,7 +44,7 @@ uses
   UThemes,
   UWebSDK,
   //curlobj,
-  sdl2;
+  SDL3;
 
 type
   TScreenOptionsNetwork = class(TOptionsMenu)
@@ -267,8 +267,8 @@ begin
   if (PressedDown) then
   begin // Key Down
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check special keys
     case PressedKey of
@@ -342,14 +342,14 @@ begin
           begin
             DataBase.NetworkUser[CurrentWebsiteIndex].UserList[CurrentUserIndex].Save := true;
 
-            if (SDL_ModState and (KMOD_LSHIFT or KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt + 999 < 9999) then
+            if (SDL_ModState and (SDL_KMOD_LSHIFT or SDL_KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt + 999 < 9999) then
             begin
               SelectsS[SelInteraction].SelectOptInt := SelectsS[SelInteraction].SelectOptInt + 999;
               InteractInc;
             end
             else
             begin
-              if (SDL_ModState and (KMOD_LCTRL or KMOD_RCTRL) <> 0) and (SelectsS[SelInteraction].SelectOptInt + 99 < 9999) then
+              if (SDL_ModState and (SDL_KMOD_LCTRL or SDL_KMOD_RCTRL) <> 0) and (SelectsS[SelInteraction].SelectOptInt + 99 < 9999) then
               begin
                 SelectsS[SelInteraction].SelectOptInt := SelectsS[SelInteraction].SelectOptInt + 99;
                 InteractInc;
@@ -396,14 +396,14 @@ begin
           begin
             DataBase.NetworkUser[CurrentWebsiteIndex].UserList[CurrentUserIndex].Save := true;
 
-            if (SDL_ModState and (KMOD_LSHIFT or KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt - 999 > 0) then
+            if (SDL_ModState and (SDL_KMOD_LSHIFT or SDL_KMOD_RSHIFT) <> 0) and (SelectsS[SelInteraction].SelectOptInt - 999 > 0) then
             begin
               SelectsS[SelInteraction].SelectOptInt := SelectsS[SelInteraction].SelectOptInt - 999;
               InteractDec;
             end
             else
             begin
-              if (SDL_ModState and (KMOD_LCTRL or KMOD_RCTRL) <> 0) and (SelectsS[SelInteraction].SelectOptInt - 99 > 0) then
+              if (SDL_ModState and (SDL_KMOD_LCTRL or SDL_KMOD_RCTRL) <> 0) and (SelectsS[SelInteraction].SelectOptInt - 99 > 0) then
               begin
                 SelectsS[SelInteraction].SelectOptInt := SelectsS[SelInteraction].SelectOptInt - 99;
                 InteractDec;

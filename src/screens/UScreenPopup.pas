@@ -34,7 +34,7 @@ interface
 {$I switches.inc}
 
 uses
-  sdl2,
+  SDL3,
   SysUtils,
   UDataBase,
   UDLLManager,

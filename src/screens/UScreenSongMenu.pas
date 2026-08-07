@@ -40,7 +40,7 @@ uses
   UMenu,
   UMusic,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type
@@ -152,8 +152,8 @@ begin
       end;
     end;
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     // check special keys
     case PressedKey of
@@ -760,8 +760,8 @@ var
   I: integer;
   SDL_ModState:  Word;
 begin
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
   case CurMenu of
     SM_Main:
       begin

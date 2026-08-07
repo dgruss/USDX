@@ -52,7 +52,7 @@ uses
   UThemes,
   UTime,
   UUnicodeStringHelper,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type
@@ -469,12 +469,12 @@ var
 begin
   CloseMessage();
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
   if (Songs.SongList.Count > 0) and (FreeListMode) then
   begin
-    if (SDL_ModState = KMOD_LCTRL) and (High(DLLMan.Websites) >= 0) then
+    if (SDL_ModState = SDL_KMOD_LCTRL) and (High(DLLMan.Websites) >= 0) then
     begin
       if (Ini.ShowWebScore < High(DLLMan.Websites)) then
         Ini.ShowWebScore := Ini.ShowWebScore + 1
@@ -507,12 +507,12 @@ var
 begin
   CloseMessage();
 
-  SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+  SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
   if (Songs.SongList.Count > 0) and (FreeListMode) then
   begin
-    if (SDL_ModState = KMOD_LCTRL) and (High(DLLMan.Websites) >= 0) then
+    if (SDL_ModState = SDL_KMOD_LCTRL) and (High(DLLMan.Websites) >= 0) then
     begin
       if (Ini.ShowWebScore > 0) then
         Ini.ShowWebScore := Ini.ShowWebScore - 1
@@ -703,11 +703,11 @@ begin
   if (PressedDown) then
   begin // Key Down
 
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-    + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+    + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT);
 
     //Jump to Artist/Title
-    if ((SDL_ModState and KMOD_LALT <> 0) and (FreeListMode)) then
+    if ((SDL_ModState and SDL_KMOD_LALT <> 0) and (FreeListMode)) then
     begin
       if(PressedKey > 1114111) then
       begin
@@ -720,7 +720,7 @@ begin
         I2 := Length(CatSongs.Song);
 
         //Jump To Title
-        if (SDL_ModState = (KMOD_LALT or KMOD_LSHIFT)) then
+        if (SDL_ModState = (SDL_KMOD_LALT or SDL_KMOD_LSHIFT)) then
         begin
           for I := 1 to High(CatSongs.Song) do
           begin
@@ -742,7 +742,7 @@ begin
           end;
         end
         //Jump to Artist
-        else if (SDL_ModState = KMOD_LALT) then
+        else if (SDL_ModState = SDL_KMOD_LALT) then
         begin
           for I := 1 to High(CatSongs.Song) do
           begin
@@ -828,7 +828,7 @@ begin
     // **********************
     // * workaround for LCTRL+R: it should be changed when we have a solution for the
     // * CTRL+'A'..'Z' problem
-    if (SDL_ModState = KMOD_LCTRL) and (PressedKey = SDLK_R) then
+    if (SDL_ModState = SDL_KMOD_LCTRL) and (PressedKey = SDLK_R) then
       CharCode := UCS4Char('R');
     // **********************
 
@@ -842,7 +842,7 @@ begin
 
       SDLK_F:
         begin
-          if (Mode = smNormal) and (SDL_ModState = KMOD_LSHIFT) and MakeMedley then
+          if (Mode = smNormal) and (SDL_ModState = SDL_KMOD_LSHIFT) and MakeMedley then
           begin
             if Length(PlaylistMedley.Song)>0 then
             begin
@@ -945,7 +945,7 @@ begin
 
       SDLK_S:
         begin
-          if not (SDL_ModState = KMOD_LSHIFT) and EnsureMedleyData(Interaction, msTag)
+          if not (SDL_ModState = SDL_KMOD_LSHIFT) and EnsureMedleyData(Interaction, msTag)
             and not MakeMedley and (Mode = smNormal) then
             StartMedley(0, msTag)
           else if not MakeMedley and
@@ -956,7 +956,7 @@ begin
 
       SDLK_D:
         begin
-          if not (SDL_ModState = KMOD_LSHIFT) and (Mode = smNormal) and
+          if not (SDL_ModState = SDL_KMOD_LSHIFT) and (Mode = smNormal) and
             (Length(getVisibleMedleyArr(msTag)) > 0) and not MakeMedley then
             StartMedley(5, msTag)
           else if (Mode = smNormal) and not MakeMedley then
@@ -971,7 +971,7 @@ begin
             if CatSongs.VisibleSongs <= 0 then
               Exit;
 
-            if (SDL_ModState = KMOD_LSHIFT) and (Ini.TabsAtStartup = 1) then // random category
+            if (SDL_ModState = SDL_KMOD_LSHIFT) and (Ini.TabsAtStartup = 1) then // random category
             begin
               I2 := 0; // count cats
               for I := 0 to High(CatSongs.Song) do
@@ -1002,7 +1002,7 @@ begin
                 end;
               end;
             end
-            else if (SDL_ModState = KMOD_LCTRL) and (Ini.TabsAtStartup = 1) then // random in all categories
+            else if (SDL_ModState = SDL_KMOD_LCTRL) and (Ini.TabsAtStartup = 1) then // random in all categories
             begin
               repeat
                 I2 := Random(High(CatSongs.Song) + 1);
@@ -1394,12 +1394,12 @@ begin
         end;
       SDLK_1:
         begin //Joker
-          if (SDL_ModState = KMOD_LSHIFT) then
+          if (SDL_ModState = SDL_KMOD_LSHIFT) then
           begin
           end
           else
           begin
-            if (SDL_ModState = KMOD_LCTRL) then
+            if (SDL_ModState = SDL_KMOD_LCTRL) then
             begin
             end
             else
@@ -1409,12 +1409,12 @@ begin
 
       SDLK_2:
         begin //Joker
-          if (SDL_ModState = KMOD_LSHIFT) then
+          if (SDL_ModState = SDL_KMOD_LSHIFT) then
           begin
           end
           else
           begin
-            if (SDL_ModState = KMOD_LCTRL) then
+            if (SDL_ModState = SDL_KMOD_LCTRL) then
             begin
             end
             else
@@ -1425,12 +1425,12 @@ begin
 
       SDLK_3:
         begin //Joker
-          if (SDL_ModState = KMOD_LSHIFT) then
+          if (SDL_ModState = SDL_KMOD_LSHIFT) then
           begin
           end
           else
           begin
-            if (SDL_ModState = KMOD_LCTRL) then
+            if (SDL_ModState = SDL_KMOD_LCTRL) then
             begin
             end
             else
@@ -2061,7 +2061,7 @@ begin
   // create all buttons
   for I := 0 to High(CatSongs.Song) do
   begin
-    while SDL_PollEvent(@Event) <> 0 do
+    while SDL_PollEvent(@Event) do
       ;
 
     CoverButton := nil;
@@ -4178,7 +4178,7 @@ begin
      (Party.Teams[Team].JokersLeft > 0) then
   begin
     //Use Joker (unless ALT modifier is used to cheat)
-    if (SDL_ModState <> KMOD_LALT) then
+    if (SDL_ModState <> SDL_KMOD_LALT) then
       Dec(Party.Teams[Team].JokersLeft);
 
     SelectRandomSong;

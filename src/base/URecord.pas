@@ -36,7 +36,7 @@ interface
 uses
   Classes,
   Math,
-  sdl2,
+  SDL3,
   SysUtils,
   UCommon,
   UMusic,

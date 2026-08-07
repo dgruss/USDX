@@ -35,7 +35,7 @@ interface
 
 uses
   SysUtils,
-  SDL2;
+  SDL3;
 
 var
   CheckMouseButton: boolean; // for checking mouse motion
@@ -53,7 +53,7 @@ type
   TMainThreadExecProc = procedure(Data: Pointer);
 
 const
-  MAINTHREAD_EXEC_EVENT = SDL_USEREVENT + 2;
+  MAINTHREAD_EXEC_EVENT = SDL_EVENT_USER + 2;
 
 {*
  * Delegates execution of procedure Proc to the main thread.
@@ -139,10 +139,8 @@ begin
     //------------------------------
 
     // initialize SDL
-    // without SDL_INIT_TIMER SDL_GetTicks() might return strange values
-    SDL_SetHint(SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING, '1');
-    SDL_Init(SDL_INIT_VIDEO or SDL_INIT_TIMER);
-    //SDL_EnableUnicode(1);  //not necessary in SDL2 any more
+    SDL_Init(SDL_INIT_VIDEO);
+    //SDL_EnableUnicode(1);  //not necessary in SDL3 any more
 
     // create luacore first so other classes can register their events
     LuaCore := TLuaCore.Create;
@@ -285,12 +283,12 @@ end;
 
 procedure StartTextInput;
 begin
-  SDL_StartTextInput;
+  SDL_StartTextInput(Screen);
 end;
 
 procedure StopTextInput;
 begin
-  SDL_StopTextInput;
+  SDL_StopTextInput(Screen);
 end;
 
 procedure SetTextInput(enabled: boolean);
@@ -309,7 +307,7 @@ var
 begin
   Max_FPS := Ini.MaxFramerateGet;
   // need to explicitly stop this because it appears to be started by default
-  SDL_StopTextInput;
+  SDL_StopTextInput(Screen);
   Done := false;
   J := 1;
   CountSkipTime();
@@ -386,54 +384,62 @@ var
   SimKey: LongWord;
   mouseDown: boolean;
   mouseBtn:  integer;
-  mouseX, mouseY: PInt;
+  mouseX, mouseY: Single;
+  EventX, EventY: integer;
   KeepGoing: boolean;
   SuppressKey: boolean;
   UpdateMouse: boolean;
 begin
   KeepGoing := true;
   SuppressKey := false;
-  while (SDL_PollEvent(@Event) <> 0) do
+  while SDL_PollEvent(@Event) do
   begin
     case Event.type_ of
-      SDL_QUITEV:
+      SDL_EVENT_QUIT:
       begin
         Display.Fade := 0;
         Display.NextScreenWithCheck := nil;
         Display.CheckOK := true;
       end;
 
-      SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_MOUSEWHEEL:
+      SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_BUTTON_DOWN,
+      SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_WHEEL:
       begin
         if (Ini.Mouse > 0) then
         begin
           UpdateMouse := true;
           case Event.type_ of
-            SDL_MOUSEBUTTONDOWN:
+            SDL_EVENT_MOUSE_BUTTON_DOWN:
             begin
               mouseDown := true;
               mouseBtn  := Event.button.button;
               CheckMouseButton := true;
               if (mouseBtn = SDL_BUTTON_LEFT) or (mouseBtn = SDL_BUTTON_RIGHT) then
                 Display.OnMouseButton(true);
+              EventX := Round(Event.button.x);
+              EventY := Round(Event.button.y);
             end;
-            SDL_MOUSEBUTTONUP:
+            SDL_EVENT_MOUSE_BUTTON_UP:
             begin
               mouseDown := false;
               mouseBtn  := Event.button.button;
               CheckMouseButton := false;
               if (mouseBtn = SDL_BUTTON_LEFT) or (mouseBtn = SDL_BUTTON_RIGHT) then
                 Display.OnMouseButton(false);
+              EventX := Round(Event.button.x);
+              EventY := Round(Event.button.y);
             end;
-            SDL_MOUSEMOTION:
+            SDL_EVENT_MOUSE_MOTION:
             begin
               if (CheckMouseButton) then
                 mouseDown := true
               else
                 mouseDown := false;
               mouseBtn  := 0;
+              EventX := Round(Event.motion.x);
+              EventY := Round(Event.motion.y);
             end;
-            SDL_MOUSEWHEEL:
+            SDL_EVENT_MOUSE_WHEEL:
             begin
               UpdateMouse := false;
               mouseDown   := (Event.wheel.y <> 0);
@@ -442,41 +448,40 @@ begin
 
               // some menu buttons require proper mouse location for trying to
               // react to mouse wheel navigation simulation (see UMenu.ParseMouse)
-              SDL_GetMouseState(@mouseX, @mouseY);
-              Event.button.x := longint(mouseX);
-              Event.button.y := longint(mouseY);
+              EventX := Round(Event.wheel.mouse_x);
+              EventY := Round(Event.wheel.mouse_y);
             end;
           end;
 
           if UpdateMouse then
           begin
             // used to update mouse coords and allow the relative mouse emulated by joystick axis motion
-            if assigned(Joy) then Joy.OnMouseMove(EnsureRange(Event.button.X, 0, 799),
-                                                  EnsureRange(Event.button.Y, 0,599));
+            if assigned(Joy) then Joy.OnMouseMove(EnsureRange(EventX, 0, 799),
+                                                  EnsureRange(EventY, 0, 599));
 
-            Display.MoveCursor(Event.button.X * 800 * Screens / ScreenW,
-                               Event.button.Y * 600 / ScreenH);
+            Display.MoveCursor(EventX * 800 * Screens div ScreenW,
+                               EventY * 600 div ScreenH);
           end;
 
           if not Assigned(Display.NextScreen) then
           begin //drop input when changing screens
             if (ScreenPopupError <> nil) and (ScreenPopupError.Visible) then
-              KeepGoing := ScreenPopupError.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupError.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupInfo <> nil) and (ScreenPopupInfo.Visible) then
-              KeepGoing := ScreenPopupInfo.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupInfo.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupCheck <> nil) and (ScreenPopupCheck.Visible) then
-              KeepGoing := ScreenPopupCheck.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupCheck.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupInsertUser <> nil) and (ScreenPopupInsertUser.Visible) then
-              KeepGoing := ScreenPopupInsertUser.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupInsertUser.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupSendScore <> nil) and (ScreenPopupSendScore.Visible) then
-              KeepGoing := ScreenPopupSendScore.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupSendScore.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupScoreDownload <> nil) and (ScreenPopupScoreDownload.Visible) then
-              KeepGoing := ScreenPopupScoreDownload.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupScoreDownload.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else if (ScreenPopupHelp <> nil) and (ScreenPopupHelp.Visible) then
-              KeepGoing := ScreenPopupHelp.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y)
+              KeepGoing := ScreenPopupHelp.ParseMouse(mouseBtn, mouseDown, EventX, EventY)
             else
             begin
-              KeepGoing := Display.ParseMouse(mouseBtn, mouseDown, Event.button.x, Event.button.y);
+              KeepGoing := Display.ParseMouse(mouseBtn, mouseDown, EventX, EventY);
 
               // if screen wants to exit
               if not KeepGoing then
@@ -485,14 +490,11 @@ begin
           end;
         end;
       end;
-      SDL_WINDOWEVENT://SDL_WINDOWEVENT_RESIZED:
-      begin
-        case Event.window.event of
-          SDL_WINDOWEVENT_MOVED: OnWindowMoved(Event.window.data1, Event.window.data2);
-          SDL_WINDOWEVENT_RESIZED: OnWindowResized(Event.window.data1, Event.window.data2);
-        end
-      end;
-      SDL_KEYDOWN, SDL_TEXTINPUT:
+      SDL_EVENT_WINDOW_MOVED:
+        OnWindowMoved(Event.window.data1, Event.window.data2);
+      SDL_EVENT_WINDOW_RESIZED:
+        OnWindowResized(Event.window.data1, Event.window.data2);
+      SDL_EVENT_KEY_DOWN, SDL_EVENT_TEXT_INPUT:
         begin
           // translate CTRL-A (ASCII 1) - CTRL-Z (ASCII 26) to correct charcodes.
           // keysyms (SDLK_A, ...) could be used instead but they ignore the
@@ -504,9 +506,9 @@ begin
           //if (Event.key.keysym.unicode in [1 .. 26]) then
           //  Event.key.keysym.unicode := Ord('A') + Event.key.keysym.unicode - 1;
 
-          if Event.key.keysym.sym = SDLK_RETURN then
+          if (Event.type_ = SDL_EVENT_KEY_DOWN) and (Event.key.key = SDLK_RETURN) then
           begin
-            if (SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT) = KMOD_LALT) then
+            if (SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT) = SDL_KMOD_LALT) then
             begin
               if SwitchVideoMode(Mode_Fullscreen) = Mode_Fullscreen then Ini.FullScreen := 1
               else Ini.FullScreen := 0;
@@ -517,12 +519,13 @@ begin
           end;
 
           // remap the "keypad enter" key to the "standard enter" key
-          if (Event.key.keysym.sym = SDLK_KP_ENTER) then Event.key.keysym.sym := SDLK_RETURN;
+          if (Event.type_ = SDL_EVENT_KEY_DOWN) and (Event.key.key = SDLK_KP_ENTER) then
+            Event.key.key := SDLK_RETURN;
 
           if not Assigned(Display.NextScreen) then
           begin //drop input when changing screens
             KeyCharUnicode:=0;
-            if (Event.type_ = SDL_TEXTINPUT) and (Event.text.text <> '') then
+            if (Event.type_ = SDL_EVENT_TEXT_INPUT) and (Event.text.text <> nil) and (Event.text.text^ <> #0) then
             try
               KeyCharUnicode:=UnicodeStringToUCS4String(UnicodeString(UTF8String(Event.text.text)))[0];
               //KeyCharUnicode:=UnicodeStringToUCS4String(UnicodeString(Event.key.keysym.unicode))[1];//Event.text.text)[0];
@@ -530,9 +533,10 @@ begin
             end;
 
             SimKey :=0;
-            if((Event.key.keysym.sym > Low(LongWord)) and (Event.key.keysym.sym < High(LongWord))) then
+            if (Event.type_ = SDL_EVENT_KEY_DOWN) and
+               (Event.key.key > Low(LongWord)) and (Event.key.key < High(LongWord)) then
             begin
-              SimKey := Event.key.keysym.sym;
+              SimKey := Event.key.key;
             end;
 
             // if print is pressed -> make screenshot and save to screenshot path
@@ -565,7 +569,8 @@ begin
 
             end;
 
-            if (not SuppressKey and (Event.key.keysym.sym = SDLK_F11)) then // toggle full screen
+            if (not SuppressKey and (Event.type_ = SDL_EVENT_KEY_DOWN) and
+                (Event.key.key = SDLK_F11)) then // toggle full screen
             begin
               if (CurrentWindowMode <> Mode_Fullscreen) then // only switch borderless fullscreen in windowed mode
               begin
@@ -586,10 +591,11 @@ begin
             end;
           end;
         end;
-      SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
-      SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP, SDL_CONTROLLERAXISMOTION,
-      SDL_JOYAXISMOTION, SDL_JOYBALLMOTION, SDL_JOYBUTTONDOWN, SDL_JOYBUTTONUP,
-      SDL_JOYDEVICEADDED, SDL_JOYDEVICEREMOVED, SDL_JOYHATMOTION:
+      SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_REMOVED, SDL_EVENT_GAMEPAD_REMAPPED,
+      SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_EVENT_GAMEPAD_BUTTON_UP, SDL_EVENT_GAMEPAD_AXIS_MOTION,
+      SDL_EVENT_JOYSTICK_AXIS_MOTION, SDL_EVENT_JOYSTICK_BALL_MOTION,
+      SDL_EVENT_JOYSTICK_BUTTON_DOWN, SDL_EVENT_JOYSTICK_BUTTON_UP,
+      SDL_EVENT_JOYSTICK_ADDED, SDL_EVENT_JOYSTICK_REMOVED, SDL_EVENT_JOYSTICK_HAT_MOTION:
         begin
           OnJoystickPollEvent(Event);
         end;
@@ -612,10 +618,11 @@ begin
 
     // push a generated event onto the queue in order to simulate a mouse movement
     // the next tick will poll the motion event and handle it just like a real input
+    FillChar(SimEvent, SizeOf(SimEvent), 0);
     SDL_GetMouseState(@mouseX, @mouseY);
-    SimEvent.user.type_ := SDL_MOUSEMOTION;
-    SimEvent.button.x := longint(mouseX);
-    SimEvent.button.y := longint(mouseY);
+    SimEvent.motion.type_ := SDL_EVENT_MOUSE_MOTION;
+    SimEvent.motion.x := mouseX;
+    SimEvent.motion.y := mouseY;
     SDL_PushEvent(@SimEvent);
   end;
 end;

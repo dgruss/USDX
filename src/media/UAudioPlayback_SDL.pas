@@ -37,7 +37,7 @@ implementation
 
 uses
   Classes,
-  sdl2,
+  SDL3,
   SysUtils,
   UAudioPlayback_SoftMixer,
   UMediaCore_SDL,
@@ -50,6 +50,7 @@ type
   TAudioPlayback_SDL = class(TAudioPlayback_SoftMixer)
     private
       Latency: double;
+      Stream: PSDL_AudioStream;
       function EnumDevices(): boolean;
     protected
       function InitializeAudioPlaybackEngine(): boolean; override;
@@ -65,12 +66,22 @@ type
   
 { TAudioPlayback_SDL }
 
-procedure SDLAudioCallback(userdata: Pointer; stream: PByteArray; len: integer); cdecl;
+procedure SDLAudioCallback(userdata: Pointer; stream: PSDL_AudioStream;
+    additional_amount, total_amount: integer); cdecl;
 var
   Engine: TAudioPlayback_SDL;
+  Buffer: PByteArray;
 begin
+  if additional_amount <= 0 then
+    Exit;
   Engine := TAudioPlayback_SDL(userdata);
-  Engine.AudioCallback(stream, len);
+  GetMem(Buffer, additional_amount);
+  try
+    Engine.AudioCallback(Buffer, additional_amount);
+    SDL_PutAudioStreamData(stream, Buffer, additional_amount);
+  finally
+    FreeMem(Buffer);
+  end;
 end;
 
 function TAudioPlayback_SDL.GetName: String;
@@ -90,15 +101,15 @@ end;
 
 function TAudioPlayback_SDL.InitializeAudioPlaybackEngine(): boolean;
 var
-  DesiredAudioSpec, ObtainedAudioSpec: TSDL_AudioSpec;
-  Format: TAudioSampleFormat;
+  DesiredAudioSpec, DeviceAudioSpec: TSDL_AudioSpec;
   SampleBufferSize: integer;
+  DeviceSampleFrames: integer;
 begin
   Result := false;
 
   EnumDevices();
 
-  if (SDL_InitSubSystem(SDL_INIT_AUDIO) = -1) then
+  if not SDL_InitSubSystem(SDL_INIT_AUDIO) then
   begin
     Log.LogError('SDL_InitSubSystem failed!', 'TAudioPlayback_SDL.InitializeAudioPlaybackEngine');
     Exit;
@@ -180,7 +191,7 @@ end;
 
 procedure TAudioPlayback_SDL.MixBuffers(dst, src: PByteArray; size: Cardinal; volume: Single);
 begin
-  SDL_MixAudio(PUInt8(dst), PUInt8(src), size, Round(volume * SDL_MIX_MAXVOLUME));
+  SDL_MixAudio(PUInt8(dst), PUInt8(src), SDL_AUDIO_S16, size, volume);
 end;
 
 

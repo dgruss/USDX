@@ -40,7 +40,7 @@ uses
   UMusic,
   UPartyTournament,
   UThemes,
-  sdl2,
+  SDL3,
   SysUtils;
 
 type
@@ -191,8 +191,8 @@ begin
   Result := true;
 
   if (PressedDown) then
-    SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
-        + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT)
+    SDL_ModState := SDL_GetModState and (SDL_KMOD_LSHIFT + SDL_KMOD_RSHIFT
+        + SDL_KMOD_LCTRL + SDL_KMOD_RCTRL + SDL_KMOD_LALT  + SDL_KMOD_RALT)
   else
     SDL_ModState := 0;
 
@@ -210,8 +210,8 @@ begin
     end;
 
     // check special keys
-    isAlternate := (SDL_ModState = KMOD_LSHIFT) or (SDL_ModState = KMOD_RSHIFT);
-    isAlternate := isAlternate or (SDL_ModState = KMOD_LALT); // legacy key combination
+    isAlternate := (SDL_ModState = SDL_KMOD_LSHIFT) or (SDL_ModState = SDL_KMOD_RSHIFT);
+    isAlternate := isAlternate or (SDL_ModState = SDL_KMOD_LALT); // legacy key combination
     case PressedKey of
       // Templates for Names Mod
       SDLK_F1:
