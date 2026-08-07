@@ -392,6 +392,7 @@ var
 begin
   KeepGoing := true;
   SuppressKey := false;
+  Display.PollPlatformEvents;
   while SDL_PollEvent(@Event) do
   begin
     case Event.type_ of

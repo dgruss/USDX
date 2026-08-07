@@ -127,39 +127,35 @@ begin
   with DesiredAudioSpec do
   begin
     freq := 44100;
-    format := AUDIO_S16SYS;
+    format := SDL_AUDIO_S16;
     channels := 2;
-    samples := SampleBufferSize;
-    callback := @SDLAudioCallback;
-    userdata := Self;
   end;
 
-  // Note: always use the "obtained" parameter, otherwise SDL might try to convert
-  // the samples itself if the desired format is not available. This might lead
-  // to problems if for example ALSA does not support 44100Hz and proposes 48000Hz.
-  // Without the obtained parameter, SDL would try to convert 44.1kHz to 48kHz with
-  // its crappy (non working) converter resulting in a wrong (too high) pitch.
-  if(SDL_OpenAudio(@DesiredAudioSpec, @ObtainedAudioSpec) = -1) then
+  // Preserve the user-facing buffer-size setting. SDL3 moved this from the
+  // audio specification to a hint that is consumed while opening the device.
+  SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, PChar(IntToStr(SampleBufferSize)));
+  Stream := SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+      @DesiredAudioSpec, @SDLAudioCallback, Self);
+  SDL_ResetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES);
+  if Stream = nil then
   begin
-    Log.LogStatus('SDL_OpenAudio: ' + SDL_GetError(), 'TAudioPlayback_SDL.InitializeAudioPlaybackEngine');
+    Log.LogStatus('SDL_OpenAudioDeviceStream: ' + SDL_GetError(), 'TAudioPlayback_SDL.InitializeAudioPlaybackEngine');
     Exit;
   end;
 
-  if(ConvertAudioFormatFromSDL(ObtainedAudioSpec.format, Format) = false) then
-  begin
-    Log.LogStatus('Unknown audio format', 'TAudioPlayback_SDL.InitializeAudioPlaybackEngine');
-    SDL_CloseAudio();
-    Exit;
-  end;
   FormatInfo := TAudioFormatInfo.Create(
-    ObtainedAudioSpec.channels,
-    ObtainedAudioSpec.freq,
-    Format
+    DesiredAudioSpec.channels,
+    DesiredAudioSpec.freq,
+    asfS16
   );
 
-  // Note: SDL does not provide info of the internal buffer state.
-  // So we use the average buffer-size.
-  Latency := (ObtainedAudioSpec.samples/2) / FormatInfo.SampleRate;
+  DeviceSampleFrames := SampleBufferSize;
+  if SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(Stream),
+      @DeviceAudioSpec, @DeviceSampleFrames) and (DeviceAudioSpec.freq > 0) then
+    // Keep the historical average-buffer latency estimate used by USDX.
+    Latency := (DeviceSampleFrames / 2) / DeviceAudioSpec.freq
+  else
+    Latency := (SampleBufferSize / 2) / FormatInfo.SampleRate;
 
   Log.LogStatus('Opened audio device', 'TAudioPlayback_SDL.InitializeAudioPlaybackEngine');
 
@@ -168,18 +164,22 @@ end;
 
 function TAudioPlayback_SDL.StartAudioPlaybackEngine(): boolean;
 begin
-  SDL_PauseAudio(0);
-  Result := true;
+  Result := (Stream <> nil) and SDL_ResumeAudioStreamDevice(Stream);
 end;
 
 procedure TAudioPlayback_SDL.StopAudioPlaybackEngine();
 begin
-  SDL_PauseAudio(1);
+  if Stream <> nil then
+    SDL_PauseAudioStreamDevice(Stream);
 end;
 
 function TAudioPlayback_SDL.FinalizeAudioPlaybackEngine(): boolean;
 begin
-  SDL_CloseAudio();
+  if Stream <> nil then
+  begin
+    SDL_DestroyAudioStream(Stream);
+    Stream := nil;
+  end;
   SDL_QuitSubSystem(SDL_INIT_AUDIO);
   Result := true;
 end;

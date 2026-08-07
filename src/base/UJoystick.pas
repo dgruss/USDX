@@ -618,11 +618,30 @@ begin
 end;
 
 procedure TJoy.OnControllerAdded(DeviceId: integer);
-var Error: string;
+var
+  Error: string;
+  Controller: TJoyController;
+  I: integer;
+  HasEnabledController: boolean;
 begin
   if not HasControllerByDeviceId(DeviceId) then
   begin
-    if not AddController(DeviceId, Error) then Log.LogError(Error, 'TJoy.Connect');
+    HasEnabledController := false;
+    for I := 0 to Controllers.Count - 1 do
+      if Controllers.Data[I].IsEnabled then
+      begin
+        HasEnabledController := true;
+        Break;
+      end;
+
+    if not AddController(DeviceId, Error) then
+      Log.LogError(Error, 'TJoy.Connect')
+    else if not HasEnabledController and GetControllerByDeviceId(DeviceId, Controller) then
+    begin
+      Log.LogStatus(Format('Enable input for hot-plugged controller %s [ID=%d]',
+          [Controller.Name, Controller.DeviceId]), 'TJoy.Connect');
+      Controller.Enable;
+    end;
   end;
 end;
 
@@ -632,8 +651,15 @@ begin
 end;
 
 procedure TJoy.OnControllerRemapped(InstanceId: integer);
+var
+  Controller: TJoyController;
 begin
-  // TODO: TJoy.OnControllerRemapped. Not implemented
+  // SDL updates the bindings of the open gamepad object in place. USDX does
+  // not cache those bindings, so acknowledge the event without reopening the
+  // device and losing its enabled/input state.
+  if GetControllerByInstanceId(InstanceId, Controller) then
+    Log.LogStatus(Format('Controller mapping updated: %s [ID=%d]',
+        [Controller.Name, InstanceId]), 'TJoy.Remap');
 end;
 
 procedure TJoy.OnControllerDPad(id: integer; PadId: integer; X, Y: integer; Legacy: boolean);
@@ -817,15 +843,27 @@ end;
 function TJoyController.SimulateMouse(ButtonId: byte; Pressed: boolean): boolean;
 var
   JoyEvent: TSDL_Event;
+  MouseX, MouseY: Single;
 begin
   Result := true;
 
-  JoyEvent := Default(TSDL_Event);
-  JoyEvent.type_ := ifthen(Pressed, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP);
-  JoyEvent.button.button := ButtonId;
+  if not LastMouseState.IsSet then
+  begin
+    SDL_GetMouseState(@MouseX, @MouseY);
+    LastMouseState.X := Round(MouseX);
+    LastMouseState.Y := Round(MouseY);
+    LastMouseState.Time := SDL_GetTicks();
+    LastMouseState.IsSet := true;
+  end;
 
-  // current SDL2 event handling requires having a valid position when sending mouse button presses
-  // TODO: clean up mouse position emulation once SDL2 input handling is handling mouse button and motion input separately
+  JoyEvent := Default(TSDL_Event);
+  JoyEvent.type_ := ifthen(Pressed, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_BUTTON_UP);
+  JoyEvent.button.button := ButtonId;
+  JoyEvent.button.down := Pressed;
+
+  // Synthetic SDL3 button events do not fill in a position for us. Preserve
+  // the current cursor position so controller clicks target the same control
+  // as physical mouse clicks.
   JoyEvent.button.X := LastMouseState.X;
   JoyEvent.button.Y := LastMouseState.Y;
 
@@ -835,16 +873,17 @@ end;
 // TODO: Move to Joystick manager
 function TJoyController.SimulateMouse(Axis: byte; Delta: real): boolean;
 var
-  mouseX, mouseY: integer;
+  MouseX, MouseY: Single;
 begin
   Result := true;
 
   if not LastMouseState.IsSet then
   begin
     SDL_GetMouseState(@mouseX, @mouseY);
-    LastMouseState.X := mousex;
-    LastMouseState.Y := mousey;
+    LastMouseState.X := Round(MouseX);
+    LastMouseState.Y := Round(MouseY);
     LastMouseState.Time := SDL_GetTicks();
+    LastMouseState.IsSet := true;
   end;
 
   if Axis = 0 then LastMouseState.DeltaX := Delta

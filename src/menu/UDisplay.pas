@@ -103,6 +103,9 @@ type
 
       procedure SaveScreenShot;
 
+      { processes native platform events that SDL does not expose }
+      procedure PollPlatformEvents;
+
       function  Draw: boolean;
 
       // TODO rewrite ParseInput to include handling/suppressing input as return, use KeepGoing as by-reference
@@ -186,7 +189,6 @@ const
 
 var
   PrintScreenHotKeyRegistered: boolean = false;
-  PrintScreenHookInstalled: boolean = false;
 
 procedure HandlePrintScreenHotKey(Data: Pointer);
 begin
@@ -194,24 +196,11 @@ begin
     Display.SaveScreenShot;
 end;
 
-procedure PrintScreenWindowsMessageHook(userdata, hWnd: Pointer; mesage: UInt32; wParam: UInt64; lParam: SInt64); cdecl;
-begin
-  if (mesage = WM_HOTKEY) and (wParam = PRINTSCREEN_HOTKEY_ID) then
-  begin
-    MainThreadExec(@HandlePrintScreenHotKey, nil);
-  end;
-end;
-
 procedure RegisterPrintScreenHotKey;
 begin
-  if not PrintScreenHookInstalled then
-  begin
-    SDL_SetWindowsMessageHook(@PrintScreenWindowsMessageHook, nil);
-    PrintScreenHookInstalled := true;
-  end;
-
   if not PrintScreenHotKeyRegistered then
-    PrintScreenHotKeyRegistered := RegisterHotKey(0, PRINTSCREEN_HOTKEY_ID, MOD_NOREPEAT, VK_SNAPSHOT);
+    PrintScreenHotKeyRegistered := RegisterHotKey(0, PRINTSCREEN_HOTKEY_ID,
+        MOD_NOREPEAT, VK_SNAPSHOT);
 end;
 
 procedure UnregisterPrintScreenHotKey;
@@ -221,14 +210,25 @@ begin
     UnregisterHotKey(0, PRINTSCREEN_HOTKEY_ID);
     PrintScreenHotKeyRegistered := false;
   end;
-
-  if PrintScreenHookInstalled then
-  begin
-    SDL_SetWindowsMessageHook(nil, nil);
-    PrintScreenHookInstalled := false;
-  end;
 end;
 {$ENDIF}
+
+procedure TDisplay.PollPlatformEvents;
+{$IFDEF MSWINDOWS}
+var
+  Message: TMsg;
+{$ENDIF}
+begin
+  {$IFDEF MSWINDOWS}
+  // RegisterHotKey with a nil window posts WM_HOTKEY to this thread's native
+  // message queue. SDL3 no longer offers a Windows message hook, so
+  // consume just our registered hotkey here and leave all other messages to
+  // SDL's event pump.
+  while PeekMessage(Message, 0, WM_HOTKEY, WM_HOTKEY, PM_REMOVE) do
+    if Message.wParam = PRINTSCREEN_HOTKEY_ID then
+      HandlePrintScreenHotKey(nil);
+  {$ENDIF}
+end;
 
 constructor TDisplay.Create;
 begin

@@ -94,6 +94,17 @@
   {$DEFINE UseSDLInput}
 {$IFEND}
 
+// Allow maintainers and CI to exercise the SDL audio backends even on
+// platforms whose release build normally prefers another backend.
+{$IFDEF ForceSDLAudio}
+  {$UNDEF UseBASSPlayback}
+  {$UNDEF UseBASSInput}
+  {$UNDEF UsePortaudioPlayback}
+  {$UNDEF UsePortaudioInput}
+  {$DEFINE UseSDLPlayback}
+  {$DEFINE UseSDLInput}
+{$ENDIF}
+
 // ffmpeg config
 {$IFDEF HaveFFmpeg}
   {$DEFINE UseFFmpegDecoder}

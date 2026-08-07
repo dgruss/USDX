@@ -49,59 +49,76 @@ type
       procedure SetVolume(Volume: single); override;
   end;
 
-procedure MicrophoneCallback(inputDevice: TSDLInputDevice; input: pointer; len: cint); cdecl;
+procedure MicrophoneCallback(userdata: Pointer; stream: PSDL_AudioStream;
+    additional_amount, total_amount: cint); cdecl;
+var
+  Buffer: Pointer;
+  BytesRead: integer;
 begin
-  AudioInputProcessor.HandleMicrophoneData(input, len, inputDevice);
+  if total_amount <= 0 then
+    Exit;
+  GetMem(Buffer, total_amount);
+  try
+    BytesRead := SDL_GetAudioStreamData(stream, Buffer, total_amount);
+    if BytesRead > 0 then
+      AudioInputProcessor.HandleMicrophoneData(Buffer, BytesRead, TSDLInputDevice(userdata));
+  finally
+    FreeMem(Buffer);
+  end;
 end;
 
 function TSDLInputDevice.Start(): boolean;
 var
-  devName: PChar;
-  spec:    TSDL_AudioSpec;
+  spec: TSDL_AudioSpec;
+  SampleFrames: integer;
 begin
   Result := false;
 
-  if DevID <= 0 then
+  if Stream = nil then
   begin
     FillChar(spec, SizeOf(spec), 0);
     with spec do
     begin
       freq := Round(AudioFormat.SampleRate);
-      format := AUDIO_S16SYS;
+      format := SDL_AUDIO_S16;
       channels := AudioFormat.Channels;
-      callback := @MicrophoneCallback;
-      userdata := pointer(Self);
-
-      samples := 0;
-      if Ini.InputDeviceConfig[CfgIndex].Latency > 0 then
-        samples := 1 shl Round(Max(Log2(freq / 1000 * Ini.InputDeviceConfig[CfgIndex].Latency), 0));
     end;
 
-    devName := nil;
-    if UseName then
-      devName := PChar(Name);
-
-    DevID := SDL_OpenAudioDevice(devName, 1, @spec, @spec, 0);
-    if DevID > 0 then
+    SampleFrames := 0;
+    if Ini.InputDeviceConfig[CfgIndex].Latency > 0 then
     begin
-      if Ini.InputDeviceConfig[CfgIndex].Latency > 0 then
-        Log.LogStatus('InputDevice "' + Name + '" opened with ' +
-                      IntToStr(spec.samples) + ' samples (' +
-                      IntToStr(round(spec.samples * 1000 / spec.freq)) +
-                      'ms) buffer', 'SDL');
-      SDL_PauseAudioDevice(DevID, 0);
+      SampleFrames := 1 shl Round(Max(Log2(spec.freq / 1000 *
+          Ini.InputDeviceConfig[CfgIndex].Latency), 0));
+      SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES,
+          PChar(IntToStr(SampleFrames)));
     end;
-    if DevID <= 0 then
+
+    Stream := SDL_OpenAudioDeviceStream(DeviceID, @spec, @MicrophoneCallback, Self);
+    if SampleFrames > 0 then
+      SDL_ResetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES);
+    if Stream <> nil then
+    begin
+      if not SDL_ResumeAudioStreamDevice(Stream) then
+      begin
+        Log.LogError('Could not start input device "' + Name + '": ' + SDL_GetError, 'SDL');
+        SDL_DestroyAudioStream(Stream);
+        Stream := nil;
+      end;
+    end
+    else
       Log.LogError('Could not open input device "' + Name + '": ' + SDL_GetError, 'SDL');
   end;
 
-  Result := (DevID > 0);
+  Result := Stream <> nil;
 end;
 
 function TSDLInputDevice.Stop(): boolean;
 begin
-  SDL_CloseAudioDevice(DevID);
-  DevID := 0;
+  if Stream <> nil then
+  begin
+    SDL_DestroyAudioStream(Stream);
+    Stream := nil;
+  end;
   Result := true;
 end;
 

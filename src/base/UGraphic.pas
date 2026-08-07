@@ -299,6 +299,7 @@ procedure LoadTextures;
 procedure LoadSingScreenTextures(ForceReload: boolean = false);
 procedure UnloadSingScreenTextures;
 procedure InitializeScreen;
+procedure EnsureWindowVisible;
 procedure LoadLoadingScreen;
 procedure LoadScreens(Title: string);
 procedure UnloadScreens;
@@ -550,6 +551,8 @@ begin
   Renderer.SetOrthographicProjection(0, RenderW, RenderH, 0, -1, 100);
   Renderer.VSync := true;
   SDL_ShowWindow(screen);
+  SDL_SyncWindow(screen);
+  EnsureWindowVisible;
 
   // load icon image (must be 32x32 for win32)
   Icon := LoadImage(ResourcesPath.Append(WINDOW_ICON));
@@ -786,6 +789,52 @@ NoDoubledResolution:
 
 end;
 
+procedure EnsureWindowVisible;
+var
+  DisplayID: TSDL_DisplayID;
+  Bounds: TSDL_Rect;
+  WindowX, WindowY, WindowW, WindowH: integer;
+  BorderTop, BorderLeft, BorderBottom, BorderRight: integer;
+  NewX, NewY, OuterW, OuterH: integer;
+begin
+  if (screen = nil) or HasWindowState(SDL_WINDOW_FULLSCREEN) then
+    Exit;
+
+  DisplayID := SDL_GetDisplayForWindow(screen);
+  if (DisplayID = 0) or not SDL_GetDisplayUsableBounds(DisplayID, @Bounds) or
+     not SDL_GetWindowPosition(screen, @WindowX, @WindowY) or
+     not SDL_GetWindowSize(screen, @WindowW, @WindowH) then
+    Exit;
+
+  BorderTop := 0;
+  BorderLeft := 0;
+  BorderBottom := 0;
+  BorderRight := 0;
+  SDL_GetWindowBordersSize(screen, @BorderTop, @BorderLeft,
+      @BorderBottom, @BorderRight);
+
+  OuterW := WindowW + BorderLeft + BorderRight;
+  OuterH := WindowH + BorderTop + BorderBottom;
+  NewX := WindowX;
+  NewY := WindowY;
+
+  if NewX < Bounds.x then
+    NewX := Bounds.x;
+  if NewY < Bounds.y then
+    NewY := Bounds.y;
+  if NewX + OuterW > Bounds.x + Bounds.w then
+    NewX := Max(Bounds.x, Bounds.x + Bounds.w - OuterW);
+  if NewY + OuterH > Bounds.y + Bounds.h then
+    NewY := Max(Bounds.y, Bounds.y + Bounds.h - OuterH);
+
+  if (NewX <> WindowX) or (NewY <> WindowY) then
+  begin
+    Log.LogStatus(Format('Window position (%d,%d) is outside the usable display; moving to (%d,%d)',
+        [WindowX, WindowY, NewX, NewY]), 'SDL_SetWindowPosition');
+    SDL_SetWindowPosition(screen, NewX, NewY);
+  end;
+end;
+
 function HasWindowState(Flag: integer): boolean;
 begin
   Result := SDL_GetWindowFlags(screen) and Flag <> 0;
@@ -947,14 +996,15 @@ begin
     end;
   end;
 
-  if CurrentWindowMode = Mode_Fullscreen then
-  begin
-    Screen.W := ScreenW;
-    Screen.H := ScreenH;
-  end
-  else
+  if CurrentWindowMode <> Mode_Fullscreen then
   begin
     SDL_SetWindowSize(screen, ScreenW, ScreenH);
+  end;
+
+  if CurrentWindowMode = Mode_Windowed then
+  begin
+    SDL_SyncWindow(screen);
+    EnsureWindowVisible;
   end;
 
   if assigned(Display) then
