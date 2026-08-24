@@ -19,11 +19,11 @@
  * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301, USA.
  *
- * $URL: https://ultrastardx.svn.sourceforge.net/svnroot/ultrastardx/trunk/src/screens/UScreenTop5.pas $
- * $Id: UScreenTop5.pas 2548 2010-06-18 11:00:21Z whiteshark0 $
+ * $URL: https://ultrastardx.svn.sourceforge.net/svnroot/ultrastardx/trunk/src/screens/UScreenHighScores.pas $
+ * $Id: UScreenHighScores.pas 2548 2010-06-18 11:00:21Z whiteshark0 $
  *}
 
-unit UScreenTop5;
+unit UScreenHighScores;
 
 interface
 
@@ -43,7 +43,7 @@ uses
   SysUtils;
 
 type
-  TScreenTop5 = class(TMenu)
+  TScreenHighScores = class(TMenu)
     public
       TextLevel:       integer;
       TextArtistTitle: integer;
@@ -80,7 +80,7 @@ uses
   UNote,
   UUnicodeUtils;
 
-function TScreenTop5.ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean;
+function TScreenHighScores.ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean;
 begin
   Result := true;
   if PressedDown then
@@ -142,7 +142,7 @@ begin
   end;
 end;
 
-function TScreenTop5.ParseMouse(MouseButton: integer;
+function TScreenHighScores.ParseMouse(MouseButton: integer;
                                 BtnDown: boolean;
 				X, Y: integer): boolean;
 begin
@@ -152,29 +152,29 @@ begin
     ParseInput(SDLK_RETURN, 0, true);
 end;
 
-constructor TScreenTop5.Create;
+constructor TScreenHighScores.Create;
 var
   I: integer;
 begin
   inherited Create;
 
-  LoadFromTheme(Theme.Top5);
+  LoadFromTheme(Theme.HighScores);
 
-  TextLevel       := AddText(Theme.Top5.TextLevel);
-  TextArtistTitle := AddText(Theme.Top5.TextArtistTitle);
+  TextLevel       := AddText(Theme.HighScores.TextLevel);
+  TextArtistTitle := AddText(Theme.HighScores.TextArtistTitle);
 
   for I := 0 to 4 do
   begin
-    StaticNumber[I+1] := AddStatic(Theme.Top5.StaticNumber[I]);
-    TextNumber[I+1]   := AddText  (Theme.Top5.TextNumber[I]);
-    TextName[I+1]     := AddText  (Theme.Top5.TextName[I]);
-    TextScore[I+1]    := AddText  (Theme.Top5.TextScore[I]);
-    TextDate[I+1]     := AddText  (Theme.Top5.TextDate[I]);
+    StaticNumber[I+1] := AddStatic(Theme.HighScores.StaticNumber[I]);
+    TextNumber[I+1]   := AddText  (Theme.HighScores.TextNumber[I]);
+    TextName[I+1]     := AddText  (Theme.HighScores.TextName[I]);
+    TextScore[I+1]    := AddText  (Theme.HighScores.TextScore[I]);
+    TextDate[I+1]     := AddText  (Theme.HighScores.TextDate[I]);
   end;
 
 end;
 
-procedure TScreenTop5.OnShow;
+procedure TScreenHighScores.OnShow;
 var
   I:    integer;
   Report: string;
@@ -182,7 +182,7 @@ begin
   inherited;
 
   if not Help.SetHelpID(ID) then
-    Log.LogWarn('No Entry for Help-ID ' + ID, 'ScreenTop5');
+    Log.LogWarn('No Entry for Help-ID ' + ID, 'ScreenHighScores');
 
   Fadeout := false;
   DifficultyShow := Player[0].Level;
@@ -204,7 +204,7 @@ begin
       begin
 	Report := Report + LineEnding + BackTraceStrFunc(ExceptFrames[I]);
       end;
-      Log.LogWarn(Report, 'UScreenTop5.OnShow');
+      Log.LogWarn(Report, 'UScreenHighScores.OnShow');
     end;
   end;
 
@@ -238,7 +238,7 @@ begin
   Text[TextLevel].Text := IDifficultyTranslated[Player[0].Level];
 end;
 
-procedure TScreenTop5.DrawScores(difficulty: integer);
+procedure TScreenHighScores.DrawScores(difficulty: integer);
 var
   I:    integer;
 begin
@@ -267,7 +267,7 @@ begin
   Text[TextLevel].Text := IDifficulty[difficulty];
 end;
 
-function TScreenTop5.Draw: boolean;
+function TScreenHighScores.Draw: boolean;
 begin
   Result := inherited Draw;
 end;
