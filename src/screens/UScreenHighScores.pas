@@ -40,33 +40,57 @@ uses
   USongs,
   UThemes,
   sdl2,
+  Math,
   SysUtils;
 
 type
   TScreenHighScores = class(TMenu)
+    private
+      procedure AddThemedFrame;
+      procedure ApplyEntryStaticLayout(StaticIndex, EntryIndex: integer; const ThemeStatic: TThemeStatic);
+      procedure ApplyEntryTextLayout(TextIndex, EntryIndex: integer; const ThemeText: TThemeText);
+      procedure ApplyTextLayout(TextIndex: integer; const ThemeText: TThemeText);
+      procedure ApplyStaticLayout(StaticIndex: integer; const ThemeStatic: TThemeStatic);
+      procedure ChangeEntryCount(Delta: integer);
+      function EntryY(EntryIndex: integer): integer;
+      function FormatEntryCountText(const TextTemplate: UTF8String): UTF8String;
+      procedure LoadCurrentSongScores;
+      function ScaledSize(ThemeSize: integer): integer;
+      procedure SetEntryVisible(EntryIndex: integer; Visible: boolean);
+      procedure UpdateEntryLayout;
+      procedure UpdateHeaderText;
     public
-      TextLevel:       integer;
-      TextArtistTitle: integer;
-      DifficultyShow:  integer;
+      TextTitle:            integer;
+      TextWhereAmI:         integer;
+      TextArtistTitle:      integer;
+      TextDifficultyLabel:  integer;
+      TextDifficulty:       integer;
+      TextContinue:         integer;
+      TextNavigate:         integer;
+      VisibleDifficulty: integer;
+      EntryCount: integer;
+      LayoutEntryCount: integer;
+      EntryRowPitch: real;
+      EntryTextSize: real;
 
-      StaticNumber:    array[1..5] of integer;
-      TextNumber:      array[1..5] of integer;
-      TextName:        array[1..5] of integer;
-      TextScore:       array[1..5] of integer;
-      TextDate:        array[1..5] of integer;
+      EntryNumberStatic: array of integer;
+      EntryNumberText:   array of integer;
+      EntryNameText:     array of integer;
+      EntryScoreText:    array of integer;
+      EntryDateText:     array of integer;
 
-      Fadeout:         boolean;
+      IsFadingOut:    boolean;
 
       constructor Create; override;
       function ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean; override;
       function ParseMouse(MouseButton: integer; BtnDown: boolean; X, Y: integer): boolean; override;
       procedure OnShow; override;
-      procedure DrawScores(difficulty: integer);
+      procedure ShowScoresForDifficulty(difficulty: integer);
       function Draw: boolean; override;
   end;
 
 const
-  ID='ID_024';   //for help system
+  HighScoresHelpID = 'ID_024';
 
 implementation
 
@@ -79,6 +103,194 @@ uses
   UIni,
   UNote,
   UUnicodeUtils;
+
+procedure TScreenHighScores.AddThemedFrame;
+var
+  I: integer;
+begin
+  PrepareButtonCollections(Theme.HighScores.ButtonCollection);
+  AddBackground(Theme.HighScores.Background);
+
+  for I := 0 to High(Theme.HighScores.Statics) do
+    AddStatic(Theme.HighScores.Statics[I]);
+end;
+
+procedure TScreenHighScores.ApplyEntryStaticLayout(StaticIndex, EntryIndex: integer; const ThemeStatic: TThemeStatic);
+var
+  EntryStatic: TThemeStatic;
+  NewSize: integer;
+begin
+  EntryStatic := ThemeStatic;
+  EntryStatic.Y := EntryY(EntryIndex) + Round(
+      (ThemeStatic.Y - Theme.HighScores.RowNameText.Y) *
+      EntryTextSize / Theme.HighScores.RowNameText.Size);
+
+  NewSize := ScaledSize(ThemeStatic.H);
+  if (ThemeStatic.H > 0) and (NewSize < ThemeStatic.H) then
+  begin
+    EntryStatic.H := NewSize;
+    EntryStatic.W := Round(ThemeStatic.W * NewSize / ThemeStatic.H);
+    EntryStatic.X := ThemeStatic.X + Round((ThemeStatic.W - EntryStatic.W) / 2);
+  end;
+
+  ApplyStaticLayout(StaticIndex, EntryStatic);
+end;
+
+procedure TScreenHighScores.ApplyEntryTextLayout(TextIndex, EntryIndex: integer; const ThemeText: TThemeText);
+var
+  EntryText: TThemeText;
+begin
+  EntryText := ThemeText;
+  EntryText.Y := EntryY(EntryIndex) + Round(
+      (ThemeText.Y - Theme.HighScores.RowNameText.Y) *
+      EntryTextSize / Theme.HighScores.RowNameText.Size);
+  EntryText.Size := ScaledSize(ThemeText.Size);
+  ApplyTextLayout(TextIndex, EntryText);
+end;
+
+procedure TScreenHighScores.ApplyTextLayout(TextIndex: integer; const ThemeText: TThemeText);
+begin
+  Text[TextIndex].X := ThemeText.X;
+  Text[TextIndex].Y := ThemeText.Y;
+  Text[TextIndex].W := ThemeText.W;
+  Text[TextIndex].H := ThemeText.H;
+  Text[TextIndex].Size := ThemeText.Size;
+end;
+
+procedure TScreenHighScores.ApplyStaticLayout(StaticIndex: integer; const ThemeStatic: TThemeStatic);
+begin
+  Statics[StaticIndex].Texture.X := ThemeStatic.X;
+  Statics[StaticIndex].Texture.Y := ThemeStatic.Y;
+  Statics[StaticIndex].Texture.W := ThemeStatic.W;
+  Statics[StaticIndex].Texture.H := ThemeStatic.H;
+end;
+
+procedure TScreenHighScores.ChangeEntryCount(Delta: integer);
+var
+  NewEntryCount: integer;
+begin
+  NewEntryCount := EntryCount + Delta;
+  if (NewEntryCount < 5) then
+    NewEntryCount := 5
+  else if (NewEntryCount > Theme.HighScores.List.MaxEntries) then
+    NewEntryCount := Theme.HighScores.List.MaxEntries;
+
+  if (NewEntryCount = EntryCount) then
+    Exit;
+
+  EntryCount := NewEntryCount;
+  Ini.HighScoreScreenEntries := EntryCount;
+  Ini.SaveHighScoreScreenEntries;
+
+  UpdateHeaderText;
+  ShowScoresForDifficulty(VisibleDifficulty);
+end;
+
+function TScreenHighScores.EntryY(EntryIndex: integer): integer;
+begin
+  Result := Round(Theme.HighScores.RowNameText.Y +
+      (EntryIndex + 1) * EntryRowPitch);
+end;
+
+function TScreenHighScores.FormatEntryCountText(const TextTemplate: UTF8String): UTF8String;
+begin
+  try
+    Result := Format(TextTemplate, [EntryCount]);
+  except
+    Result := TextTemplate;
+  end;
+end;
+
+procedure TScreenHighScores.LoadCurrentSongScores;
+var
+  I: integer;
+  Report: string;
+begin
+  try
+    DataBase.ReadScore(CurrentSong, Theme.HighScores.List.MaxEntries);
+  except
+    on E : Exception do
+    begin
+      Report := 'Reading songscore failed in highscore screen. Faulty database file?' + LineEnding +
+      'Stacktrace:' + LineEnding;
+      if E <> nil then
+      begin
+        Report := Report + 'Exception class: ' + E.ClassName + LineEnding +
+        'Message: ' + E.Message + LineEnding;
+      end;
+      Report := Report + BackTraceStrFunc(ExceptAddr);
+      for I := 0 to ExceptFrameCount - 1 do
+      begin
+        Report := Report + LineEnding + BackTraceStrFunc(ExceptFrames[I]);
+      end;
+      Log.LogWarn(Report, 'UScreenHighScores.LoadCurrentSongScores');
+    end;
+  end;
+end;
+
+function TScreenHighScores.ScaledSize(ThemeSize: integer): integer;
+begin
+  Result := Round(ThemeSize * Min(1.0,
+      EntryTextSize / Theme.HighScores.RowNameText.Size));
+end;
+
+procedure TScreenHighScores.SetEntryVisible(EntryIndex: integer; Visible: boolean);
+begin
+  Statics[EntryNumberStatic[EntryIndex]].Visible := Visible;
+  Text[EntryNumberText[EntryIndex]].Visible := Visible;
+  Text[EntryNameText[EntryIndex]].Visible := Visible;
+  Text[EntryScoreText[EntryIndex]].Visible := Visible;
+  Text[EntryDateText[EntryIndex]].Visible := Visible;
+end;
+
+procedure TScreenHighScores.UpdateEntryLayout;
+var
+  I: integer;
+  LayoutIndex: integer;
+  LayoutRows: integer;
+  Density: real;
+  FontToPitchRatio: real;
+  AvailableHeight: real;
+begin
+  LayoutRows := LayoutEntryCount + 2;
+  Density := EnsureRange((LayoutEntryCount - 5) / 15, 0.0, 1.0);
+  Density := Power(Density, 2.0);
+  FontToPitchRatio := 0.78 + Density * (1.10 - 0.78);
+  AvailableHeight := Max(0,
+      Theme.HighScores.List.BottomY - Theme.HighScores.RowNameText.Y);
+  EntryTextSize := AvailableHeight /
+      ((LayoutRows - 1) / FontToPitchRatio + 0.85);
+  EntryTextSize := EnsureRange(EntryTextSize,
+      Theme.HighScores.List.MinTextSize,
+      Theme.HighScores.RowNameText.Size);
+  EntryRowPitch := Max(0,
+      (AvailableHeight - EntryTextSize * 0.85) / (LayoutRows - 1));
+
+  for I := 0 to High(EntryNumberStatic) do
+  begin
+    if (I < LayoutEntryCount) then
+      LayoutIndex := I
+    else
+      LayoutIndex := LayoutEntryCount - 1;
+
+    ApplyEntryStaticLayout(EntryNumberStatic[I], LayoutIndex, Theme.HighScores.RowNumberStatic);
+
+    ApplyEntryTextLayout(EntryNumberText[I], LayoutIndex,
+      Theme.HighScores.RowNumberText);
+    ApplyEntryTextLayout(EntryNameText[I], LayoutIndex,
+      Theme.HighScores.RowNameText);
+    ApplyEntryTextLayout(EntryScoreText[I], LayoutIndex,
+      Theme.HighScores.RowScoreText);
+    ApplyEntryTextLayout(EntryDateText[I], LayoutIndex,
+      Theme.HighScores.RowDateText);
+  end;
+end;
+
+procedure TScreenHighScores.UpdateHeaderText;
+begin
+  Text[TextTitle].Text := FormatEntryCountText(Theme.HighScores.TextTitle.Text);
+  Text[TextWhereAmI].Text := FormatEntryCountText(Theme.HighScores.TextWhereAmI.Text);
+end;
 
 function TScreenHighScores.ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean;
 begin
@@ -100,10 +312,10 @@ begin
       SDLK_BACKSPACE,
       SDLK_RETURN:
         begin
-          if (not Fadeout) then
+          if (not IsFadingOut) then
           begin
             FadeTo(@ScreenSong);
-            Fadeout := true;
+            IsFadingOut := true;
           end;
         end;
       SDLK_TAB:
@@ -112,39 +324,33 @@ begin
         end;
       SDLK_RIGHT:
         begin
-          inc(DifficultyShow);
-          if (DifficultyShow>2) then
-            DifficultyShow:=0;
-          DrawScores(DifficultyShow);
+          inc(VisibleDifficulty);
+          if (VisibleDifficulty > 2) then
+            VisibleDifficulty := 0;
+          ShowScoresForDifficulty(VisibleDifficulty);
         end;
       SDLK_LEFT:
         begin
-          dec(DifficultyShow);
-          if (DifficultyShow<0) then
-            DifficultyShow:=2;
-          DrawScores(DifficultyShow);
+          dec(VisibleDifficulty);
+          if (VisibleDifficulty < 0) then
+            VisibleDifficulty := 2;
+          ShowScoresForDifficulty(VisibleDifficulty);
         end;
       SDLK_UP:
         begin
-          inc(DifficultyShow);
-          if (DifficultyShow>2) then
-            DifficultyShow:=0;
-          DrawScores(DifficultyShow);
+          ChangeEntryCount(-1);
         end;
       SDLK_DOWN:
         begin
-          dec(DifficultyShow);
-          if (DifficultyShow<0) then
-            DifficultyShow:=2;
-          DrawScores(DifficultyShow);
+          ChangeEntryCount(1);
         end;
     end;
   end;
 end;
 
 function TScreenHighScores.ParseMouse(MouseButton: integer;
-                                BtnDown: boolean;
-				X, Y: integer): boolean;
+                                      BtnDown: boolean;
+                                      X, Y: integer): boolean;
 begin
   Result := true;
   if (MouseButton = SDL_BUTTON_LEFT) and BtnDown then
@@ -155,116 +361,87 @@ end;
 constructor TScreenHighScores.Create;
 var
   I: integer;
+  ThemeText: TThemeText;
 begin
   inherited Create;
+  EntryCount := EnsureRange(Ini.HighScoreScreenEntries, 5, Theme.HighScores.List.MaxEntries);
+  LayoutEntryCount := 5;
+  SetLength(EntryNumberStatic, Theme.HighScores.List.MaxEntries);
+  SetLength(EntryNumberText, Theme.HighScores.List.MaxEntries);
+  SetLength(EntryNameText, Theme.HighScores.List.MaxEntries);
+  SetLength(EntryScoreText, Theme.HighScores.List.MaxEntries);
+  SetLength(EntryDateText, Theme.HighScores.List.MaxEntries);
 
-  LoadFromTheme(Theme.HighScores);
+  AddThemedFrame;
 
-  TextLevel       := AddText(Theme.HighScores.TextLevel);
+  TextTitle := AddText(Theme.HighScores.TextTitle);
+  TextWhereAmI := AddText(Theme.HighScores.TextWhereAmI);
   TextArtistTitle := AddText(Theme.HighScores.TextArtistTitle);
+  TextDifficultyLabel := AddText(Theme.HighScores.TextDifficultyLabel);
+  TextDifficulty := AddText(Theme.HighScores.TextDifficulty);
+  TextContinue := AddText(Theme.HighScores.TextContinue);
+  TextNavigate := AddText(Theme.HighScores.TextNavigate);
 
-  for I := 0 to 4 do
+  for I := 0 to Theme.HighScores.List.MaxEntries - 1 do
   begin
-    StaticNumber[I+1] := AddStatic(Theme.HighScores.StaticNumber[I]);
-    TextNumber[I+1]   := AddText  (Theme.HighScores.TextNumber[I]);
-    TextName[I+1]     := AddText  (Theme.HighScores.TextName[I]);
-    TextScore[I+1]    := AddText  (Theme.HighScores.TextScore[I]);
-    TextDate[I+1]     := AddText  (Theme.HighScores.TextDate[I]);
+    EntryNumberStatic[I] := AddStatic(Theme.HighScores.RowNumberStatic);
+
+    ThemeText := Theme.HighScores.RowNumberText;
+    ThemeText.Text := IntToStr(I + 1);
+    EntryNumberText[I] := AddText(ThemeText);
+
+    EntryNameText[I] := AddText(Theme.HighScores.RowNameText);
+    EntryScoreText[I] := AddText(Theme.HighScores.RowScoreText);
+    EntryDateText[I] := AddText(Theme.HighScores.RowDateText);
   end;
 
+  UpdateEntryLayout;
+  UpdateHeaderText;
 end;
 
 procedure TScreenHighScores.OnShow;
-var
-  I:    integer;
-  Report: string;
 begin
   inherited;
 
-  if not Help.SetHelpID(ID) then
-    Log.LogWarn('No Entry for Help-ID ' + ID, 'ScreenHighScores');
+  if not Help.SetHelpID(HighScoresHelpID) then
+    Log.LogWarn('No Entry for Help-ID ' + HighScoresHelpID, 'ScreenHighScores');
 
-  Fadeout := false;
-  DifficultyShow := Player[0].Level;
+  IsFadingOut := false;
+  VisibleDifficulty := Player[0].Level;
 
-  try
-    DataBase.ReadScore(CurrentSong);
-  except
-    on E : Exception do
-    begin
-      Report := 'Reading songscore failed in Top-5-screen. Faulty database file?' + LineEnding +
-      'Stacktrace:' + LineEnding;
-      if E <> nil then
-      begin
-	Report := Report + 'Exception class: ' + E.ClassName + LineEnding +
-	'Message: ' + E.Message + LineEnding;
-      end;
-      Report := Report + BackTraceStrFunc(ExceptAddr);
-      for I := 0 to ExceptFrameCount - 1 do
-      begin
-	Report := Report + LineEnding + BackTraceStrFunc(ExceptFrames[I]);
-      end;
-      Log.LogWarn(Report, 'UScreenHighScores.OnShow');
-    end;
-  end;
+  UpdateEntryLayout;
+  UpdateHeaderText;
+  LoadCurrentSongScores;
 
   Text[TextArtistTitle].Text := CurrentSong.Artist + ' - ' + CurrentSong.Title;
 
-  // TODO: the following loops are really hard to read
-  for I := 1 to Length(CurrentSong.Score[Player[0].Level]) do
-  begin
-    Statics[StaticNumber[I]].Visible := true;
-    Text[TextNumber[I]].Visible := true;
-    Text[TextName[I]].Visible := true;
-    Text[TextScore[I]].Visible := true;
-    Text[TextDate[I]].Visible := true;
-
-    Text[TextName[I]].Text := CurrentSong.Score[Player[0].Level, I-1].Name;
-    Text[TextScore[I]].Text := IntToStr(CurrentSong.Score[Player[0].Level, I-1].Score);
-    Text[TextDate[I]].Text := CurrentSong.Score[Player[0].Level, I-1].Date;
-  end;
-
-  If Length(CurrentSong.Score[Player[0].Level])=0 then
+  if Length(CurrentSong.Score[Player[0].Level]) = 0 then
     FadeTo(@ScreenSong); //if there are no scores to show, go to next screen
-  for I := Length(CurrentSong.Score[Player[0].Level]) + 1 to 5 do
-  begin
-    Statics[StaticNumber[I]].Visible := false;
-    Text[TextNumber[I]].Visible := false;
-    Text[TextName[I]].Visible := false;
-    Text[TextScore[I]].Visible := false;
-    Text[TextDate[I]].Visible := false;
-  end;
 
-  Text[TextLevel].Text := IDifficultyTranslated[Player[0].Level];
+  ShowScoresForDifficulty(Player[0].Level);
 end;
 
-procedure TScreenHighScores.DrawScores(difficulty: integer);
+procedure TScreenHighScores.ShowScoresForDifficulty(difficulty: integer);
 var
   I:    integer;
 begin
-  for I := 1 to Length(CurrentSong.Score[difficulty]) do
-  begin
-    Statics[StaticNumber[I]].Visible := true;
-    Text[TextNumber[I]].Visible := true;
-    Text[TextName[I]].Visible := true;
-    Text[TextScore[I]].Visible := true;
-    Text[TextDate[I]].Visible := true;
+  LayoutEntryCount := EnsureRange(Length(CurrentSong.Score[difficulty]), 5, EntryCount);
+  UpdateEntryLayout;
 
-    Text[TextName[I]].Text := CurrentSong.Score[difficulty, I-1].Name;
-    Text[TextScore[I]].Text := IntToStr(CurrentSong.Score[difficulty, I-1].Score);
-    Text[TextDate[I]].Text := CurrentSong.Score[difficulty, I-1].Date;
+  for I := 0 to High(EntryNumberStatic) do
+  begin
+    if (I < EntryCount) and (I < Length(CurrentSong.Score[difficulty])) then
+    begin
+      SetEntryVisible(I, true);
+      Text[EntryNameText[I]].Text := CurrentSong.Score[difficulty, I].Name;
+      Text[EntryScoreText[I]].Text := IntToStr(CurrentSong.Score[difficulty, I].Score);
+      Text[EntryDateText[I]].Text := CurrentSong.Score[difficulty, I].Date;
+    end
+    else
+      SetEntryVisible(I, false);
   end;
 
-  for I := Length(CurrentSong.Score[difficulty]) + 1 to 5 do
-  begin
-    Statics[StaticNumber[I]].Visible := false;
-    Text[TextNumber[I]].Visible := false;
-    Text[TextName[I]].Visible := false;
-    Text[TextScore[I]].Visible := false;
-    Text[TextDate[I]].Visible := false;
-  end;
-
-  Text[TextLevel].Text := IDifficulty[difficulty];
+  Text[TextDifficulty].Text := IDifficultyTranslated[difficulty];
 end;
 
 function TScreenHighScores.Draw: boolean;
