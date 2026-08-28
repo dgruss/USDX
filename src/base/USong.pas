@@ -1114,7 +1114,7 @@ begin
     begin
       RemoveTagsFromTagMap('VERSION');
       try
-	    Free(self.FormatVersion); // free default version before assigning version from file
+	    FreeAndNil(self.FormatVersion); // free default version before assigning version from file
         self.FormatVersion := TVersion.Create(Value);
       except
         on E: Exception do
