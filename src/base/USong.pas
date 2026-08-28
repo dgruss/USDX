@@ -1114,7 +1114,7 @@ begin
     begin
       RemoveTagsFromTagMap('VERSION');
       try
-	    FreeAndNil(self.FormatVersion); // free default version before assigning version from file
+	    self.FormatVersion.Free(); // free default version before assigning version from file
         self.FormatVersion := TVersion.Create(Value);
       except
         on E: Exception do
@@ -1130,7 +1130,7 @@ begin
         Log.LogError('Unsupported format version ' + self.FormatVersion.VersionString + '; Maximum supported version is 1.X.X: ' + FullFileName);
         Exit;
       end;
-    end
+    end;
 
     // For Version >=1.0.0 Encoding is always UTF-8
     // For Version <1.0.0 read Encoding from ENCODING header
