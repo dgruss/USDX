@@ -390,6 +390,7 @@ begin
   Self.Background:= PATH_NONE();
   Self.Video    := PATH_NONE();
 
+  // create default version
   Self.FormatVersion := TVersion.Create();
 end;
 
@@ -1113,6 +1114,7 @@ begin
     begin
       RemoveTagsFromTagMap('VERSION');
       try
+	    Free(self.FormatVersion); // free default version before assigning version from file
         self.FormatVersion := TVersion.Create(Value);
       except
         on E: Exception do
@@ -1129,8 +1131,6 @@ begin
         Exit;
       end;
     end
-    else
-      self.FormatVersion := TVersion.Create; //Default legacy version 0.3.0
 
     // For Version >=1.0.0 Encoding is always UTF-8
     // For Version <1.0.0 read Encoding from ENCODING header
