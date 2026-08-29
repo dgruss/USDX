@@ -33,11 +33,22 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-tools
       - name: Install Dependencies
+        timeout-minutes: 10
         run: |
-          curl.exe -L --max-time 60 -o fpc-installer.exe "https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download"
-          curl.exe -L --max-time 60 -o nsis-3.05-setup.exe "https://sourceforge.net/projects/nsis/files/NSIS%203/3.05/nsis-3.05-setup.exe/download"
-          Start-Process -FilePath ".\\fpc-installer.exe" -ArgumentList "/TYPE=full /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART" -Wait
-          ./nsis-3.05-setup.exe /S
+          curl.exe --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 300 --output fpc-installer.exe "https://downloads.freepascal.org/fpc/dist/3.2.2/i386-win32/fpc-3.2.2.win32.and.win64.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download the FPC installer (curl exit code $LASTEXITCODE)" }
+          curl.exe --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 --output nsis-3.05-setup.exe "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.05/nsis-3.05-setup.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download the NSIS installer (curl exit code $LASTEXITCODE)" }
+
+          $fpcHash = (Get-FileHash -Algorithm SHA256 fpc-installer.exe).Hash
+          if ($fpcHash -ne "8C255390544B051388B577EB61C6191A04883264AFE0E3369B3600A56DAF7BDE") { throw "Unexpected FPC installer hash: $fpcHash" }
+          $nsisHash = (Get-FileHash -Algorithm SHA256 nsis-3.05-setup.exe).Hash
+          if ($nsisHash -ne "1A3CC9401667547B9B9327A177B13485F7C59C2303D4B6183E7BC9E6C8D6BFDB") { throw "Unexpected NSIS installer hash: $nsisHash" }
+
+          $fpcInstaller = Start-Process -FilePath ".\fpc-installer.exe" -ArgumentList "/TYPE=full /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($fpcInstaller.ExitCode -ne 0) { throw "FPC installer failed with exit code $($fpcInstaller.ExitCode)" }
+          & .\nsis-3.05-setup.exe /S
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installer failed with exit code $LASTEXITCODE" }
       - name: Download prebuilt DLLs
         run: |
           python dldlls.py
