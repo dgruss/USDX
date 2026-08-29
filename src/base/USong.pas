@@ -447,6 +447,7 @@ begin
   Self.Path     := aFileName.GetPath;
   Self.FileName := aFileName.GetName;
   Self.Folder   := GetFolderCategory(aFileName);
+  Self.FormatVersion := TVersion.Create();
 
   (*
   if (aFileName.IsFile) then
